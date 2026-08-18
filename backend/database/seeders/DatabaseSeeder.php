@@ -69,29 +69,39 @@ class DatabaseSeeder extends Seeder
             DB::table('permissions')->updateOrInsert(['name' => $p['name']], $p);
         }
 
-        // Map Admin to all
+        // 1. Super Admin (ALL PERMISSIONS GRANTED)
         $allPids = DB::table('permissions')->pluck('id');
         foreach ($allPids as $pid) {
             DB::table('role_permissions')->updateOrInsert(['role_id' => $adminRoleId, 'permission_id' => $pid]);
         }
 
-        // Map Doctor
-        $docPids = DB::table('permissions')->whereIn('module', ['clinical', 'ai'])->pluck('id');
-        foreach ($docPids as $pid) {
-            DB::table('role_permissions')->updateOrInsert(['role_id' => $doctorRoleId, 'permission_id' => $pid]);
-        }
-
-        // Map Pharmacist
-        $pharmPids = DB::table('permissions')->whereIn('module', ['inventory', 'ai'])->pluck('id');
+        // 2. Chief Pharmacist (Inventory, Batches, Suppliers, Dispensing Rx, AI Expiry Risk)
+        $pharmPids = DB::table('permissions')->whereIn('name', [
+            'inventory.view', 'inventory.manage', 'batches.view', 'batches.manage',
+            'suppliers.manage', 'transactions.view', 'ai.analytics', 'prescriptions.view'
+        ])->pluck('id');
         foreach ($pharmPids as $pid) {
             DB::table('role_permissions')->updateOrInsert(['role_id' => $pharmacistRoleId, 'permission_id' => $pid]);
         }
 
-        // Map Nurse
-        $nursePids = DB::table('permissions')->whereIn('name', ['patients.view', 'patients.manage', 'appointments.view', 'appointments.manage'])->pluck('id');
+        // 3. Medical Officer / Doctor (Clinical Consultations, Rx Issue, EHR, AI Triage & Override)
+        $docPids = DB::table('permissions')->whereIn('name', [
+            'appointments.view', 'appointments.manage', 'prescriptions.view', 'prescriptions.issue',
+            'patients.view', 'patients.manage', 'ai.triage', 'ai.override', 'inventory.view'
+        ])->pluck('id');
+        foreach ($docPids as $pid) {
+            DB::table('role_permissions')->updateOrInsert(['role_id' => $doctorRoleId, 'permission_id' => $pid]);
+        }
+
+        // 4. Staff Nurse / Ward Care Officer (Patient Intake, Appointment Check-in, Ward Status, AI Triage)
+        $nursePids = DB::table('permissions')->whereIn('name', [
+            'appointments.view', 'appointments.manage', 'patients.view', 'patients.manage',
+            'ai.triage', 'departments.manage'
+        ])->pluck('id');
         foreach ($nursePids as $pid) {
             DB::table('role_permissions')->updateOrInsert(['role_id' => $nurseRoleId, 'permission_id' => $pid]);
         }
+
 
 
         // 3. Departments

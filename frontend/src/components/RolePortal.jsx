@@ -5,7 +5,7 @@ import {
   Search, Plus, RefreshCw, Database, Server, CheckCircle2, 
   AlertCircle, ChevronRight, Stethoscope, HeartPulse, Clock,
   Bot, AlertTriangle, Sparkles, Package, Pill, Layers, FileText,
-  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator
+  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator, Send, MessageSquare, Check
 } from 'lucide-react';
 
 export default function RolePortal({ user, onLogout, theme, setTheme }) {
@@ -28,14 +28,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   };
 
   const [activeTab, setActiveTab] = useState(getTabFromPath(location.pathname));
-  const [searchQuery, setSearchQuery] = useState('');
   
   // Real API Data State
   const [backendStatus, setBackendStatus] = useState({ loading: true, online: false, data: null });
   const [patients, setPatients] = useState([]);
   const [batches, setBatches] = useState([]);
   const [aiRiskData, setAiRiskData] = useState([]);
-  const [aiTriageLogs, setAiTriageLogs] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
   // Super Admin Users State
@@ -84,6 +82,26 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [supplierSearch, setSupplierSearch] = useState('');
   const [recalculatingId, setRecalculatingId] = useState(null);
   const [recalculatingAll, setRecalculatingAll] = useState(false);
+
+  // AI Triage & Chat State
+  const [triageLogsList, setTriageLogsList] = useState([]);
+  const [triageSearch, setTriageSearch] = useState('');
+  const [triageSubView, setTriageSubView] = useState('chat'); // 'chat' or 'inspection'
+  const [chatMessages, setChatMessages] = useState([
+    {
+      id: 1,
+      sender: 'ai',
+      text: 'Hello! I am MediSync AI Clinical Triage Assistant. Please describe your symptoms or patient presentation for instant triage evaluation, department routing, and medication recommendations.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [selectedPatientForTriage, setSelectedPatientForTriage] = useState('');
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+
+  // Doctor Triage Override Modal
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [selectedTriageLog, setSelectedTriageLog] = useState(null);
 
   // User Modals
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
@@ -149,9 +167,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     email: '', phone: '+94 11 234 5678', address: 'Colombo, Sri Lanka', lead_time_days: 7, rating: 4.80, status: 'active'
   });
 
-  const [symptomInput, setSymptomInput] = useState('');
-  const [isTriaging, setIsTriaging] = useState(false);
-
   useEffect(() => {
     setActiveTab(getTabFromPath(location.pathname));
   }, [location.pathname]);
@@ -184,15 +199,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchCategoriesData();
       fetchMedicinesData();
       fetchDepartmentsData();
+      fetchTriageLogsData();
 
       const batchesRes = await fetch('/api/v1/batches');
       if (batchesRes.ok) setBatches(await batchesRes.json());
 
       const aiRes = await fetch('/api/v1/ai/inventory-risk');
       if (aiRes.ok) setAiRiskData(await aiRes.json());
-
-      const triageRes = await fetch('/api/v1/ai/triage');
-      if (triageRes.ok) setAiTriageLogs(await triageRes.json());
 
       const aptsRes = await fetch('/api/v1/appointments');
       if (aptsRes.ok) setAppointments(await aptsRes.json());
@@ -206,6 +219,15 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } catch (err) {
       console.error('API Fetch error:', err);
       setBackendStatus({ loading: false, online: false, data: null });
+    }
+  };
+
+  const fetchTriageLogsData = async () => {
+    try {
+      const res = await fetch('/api/v1/ai/triage');
+      if (res.ok) setTriageLogsList(await res.json());
+    } catch (err) {
+      console.error('Triage logs fetch error:', err);
     }
   };
 
@@ -285,6 +307,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
     if (roleKey === 'super_admin') {
       items.push({ id: 'users', label: 'User Management', icon: UserCheck });
+      items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
       items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
@@ -294,10 +317,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
       items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
-      items.push({ id: 'ai_triage', label: 'AI Patient Triage', icon: Bot });
       items.push({ id: 'schema', label: 'Database Architecture', icon: Database });
     } else {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
+      items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
       items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
       items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
@@ -309,7 +332,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
       }
       if (roleKey === 'doctor') {
-        items.push({ id: 'ai_triage', label: 'AI Patient Triage', icon: Bot, badge: 'Clinical' });
         items.push({ id: 'appointments', label: 'Appointments', icon: Calendar });
       }
     }
@@ -318,6 +340,76 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   };
 
   const navItems = getNavItems();
+
+  // AI Chat & Triage Handlers
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isAiProcessing) return;
+
+    const userText = chatInput.trim();
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // Add user message to UI state immediately
+    const userMsg = { id: Date.now(), sender: 'user', text: userText, timestamp: nowTime };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setIsAiProcessing(true);
+
+    try {
+      const res = await fetch('/api/v1/ai/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input_symptoms: userText,
+          patient_id: selectedPatientForTriage ? parseInt(selectedPatientForTriage) : null
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const aiMsg = {
+          id: Date.now() + 1,
+          sender: 'ai',
+          text: data.ai_response || data.clinical_summary,
+          triage_level: data.suggested_triage_level,
+          department: data.recommended_department,
+          confidence: data.ai_confidence_score,
+          medications: data.suggested_medications,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setChatMessages(prev => [...prev, aiMsg]);
+        fetchTriageLogsData();
+      }
+    } catch (err) {
+      console.error('AI Clinical API error:', err);
+      setChatMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        sender: 'ai',
+        text: 'Error connecting to Clinical AI Engine. Please check system logs.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    }
+    setIsAiProcessing(false);
+  };
+
+  const handleDoctorOverride = async (e) => {
+    e.preventDefault();
+    if (!selectedTriageLog) return;
+    try {
+      const res = await fetch(`/api/v1/ai/triage/${selectedTriageLog.id}/override`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedTriageLog)
+      });
+      if (res.ok) {
+        setShowOverrideModal(false);
+        setSelectedTriageLog(null);
+        fetchTriageLogsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // Department Handlers
   const handleCreateDepartment = async (e) => {
@@ -739,33 +831,18 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setRecalculatingAll(false);
   };
 
-  const handleRunAiTriage = (e) => {
-    e.preventDefault();
-    if (!symptomInput.trim()) return;
-    setIsTriaging(true);
-    setTimeout(() => {
-      const isEmergency = symptomInput.toLowerCase().includes('chest') || symptomInput.toLowerCase().includes('breath');
-      const result = {
-        id: Date.now(),
-        patient_code: 'PAT-2026-WALKIN',
-        first_name: 'Walk-in Patient',
-        last_name: '',
-        input_symptoms: symptomInput,
-        suggested_triage_level: isEmergency ? 'Emergency' : 'Routine',
-        recommended_department: isEmergency ? 'Cardiology & ICU' : 'General OPD',
-        ai_confidence_score: isEmergency ? 96.8 : 89.4,
-        created_at: new Date().toISOString()
-      };
-      setAiTriageLogs([result, ...aiTriageLogs]);
-      setIsTriaging(false);
-      setSymptomInput('');
-    }, 1000);
-  };
-
   const filteredUsers = usersList.filter(u => 
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
     (u.role_name && u.role_name.toLowerCase().includes(userSearch.toLowerCase()))
+  );
+
+  const filteredTriageLogs = triageLogsList.filter(t => 
+    t.input_symptoms.toLowerCase().includes(triageSearch.toLowerCase()) ||
+    t.suggested_triage_level.toLowerCase().includes(triageSearch.toLowerCase()) ||
+    t.recommended_department.toLowerCase().includes(triageSearch.toLowerCase()) ||
+    (t.first_name && `${t.first_name} ${t.last_name}`.toLowerCase().includes(triageSearch.toLowerCase())) ||
+    (t.patient_code && t.patient_code.toLowerCase().includes(triageSearch.toLowerCase()))
   );
 
   const filteredDepartments = departmentsList.filter(d => 
@@ -812,6 +889,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     s.supplier_code.toLowerCase().includes(supplierSearch.toLowerCase()) ||
     (s.contact_person && s.contact_person.toLowerCase().includes(supplierSearch.toLowerCase()))
   );
+
+  // Triage Counters
+  const emergencyTriageCount = triageLogsList.filter(t => t.suggested_triage_level === 'Emergency').length;
+  const urgentTriageCount = triageLogsList.filter(t => t.suggested_triage_level === 'Urgent').length;
+  const avgConfidenceScore = triageLogsList.length > 0
+    ? (triageLogsList.reduce((acc, curr) => acc + (parseFloat(curr.ai_confidence_score) || 0), 0) / triageLogsList.length).toFixed(1)
+    : '94.5';
 
   // Duty Status Counters
   const onDutyCount = staffList.filter(s => s.duty_status === 'on_duty').length;
@@ -916,12 +1000,14 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           <div>
             <h1 style={{ fontSize: '1.7rem', fontWeight: '800' }}>
               {activeTab === 'users' ? 'User Management Directory' : (
-                activeTab === 'departments' ? 'Hospital Departments & Wards' : (
-                  activeTab === 'staff' ? 'Hospital Staff Roster' : (
-                    activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
-                      activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
-                        activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
-                          activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                activeTab === 'ai_triage' ? 'MediSync AI Clinical Symptom Triage & Chat' : (
+                  activeTab === 'departments' ? 'Hospital Departments & Wards' : (
+                    activeTab === 'staff' ? 'Hospital Staff Roster' : (
+                      activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
+                        activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
+                          activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
+                            activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                          )
                         )
                       )
                     )
@@ -944,6 +1030,289 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             </button>
           </div>
         </header>
+
+        {/* TAB: MEDISYNC AI CLINICAL TRIAGE & INTERACTIVE CHAT */}
+        {activeTab === 'ai_triage' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* KPI Stat Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL TRIAGE ASSESSMENTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{triageLogsList.length} Evaluations</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>EMERGENCY CASES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{emergencyTriageCount} Critical</span>
+                </div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>URGENT CASES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{urgentTriageCount} Priority</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CLINICAL AI CONFIDENCE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{avgConfidenceScore}% Avg</div>
+              </div>
+            </div>
+
+            {/* Sub-View Switcher Bar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                <button
+                  onClick={() => setTriageSubView('chat')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: triageSubView === 'chat' ? 'var(--primary)' : 'transparent',
+                    color: triageSubView === 'chat' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <MessageSquare size={16} />
+                  <span>Interactive AI Clinical Chat</span>
+                </button>
+                <button
+                  onClick={() => setTriageSubView('inspection')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: triageSubView === 'inspection' ? 'var(--primary)' : 'transparent',
+                    color: triageSubView === 'inspection' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <ShieldCheck size={16} />
+                  <span>Clinician Log Inspection ({triageLogsList.length})</span>
+                </button>
+              </div>
+
+              {triageSubView === 'chat' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Link Patient EHR:</span>
+                  <select 
+                    className="input-field" 
+                    value={selectedPatientForTriage} 
+                    onChange={e => setSelectedPatientForTriage(e.target.value)}
+                    style={{ width: '220px', padding: '6px 12px', fontSize: '0.82rem' }}
+                  >
+                    <option value="">Walk-in / Unlinked Patient</option>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* MODE 1: INTERACTIVE AI CLINICAL CHAT */}
+            {triageSubView === 'chat' && (
+              <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '540px', padding: '0', overflow: 'hidden' }}>
+                {/* Chat Header */}
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.15)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ background: 'var(--primary)', padding: '8px', borderRadius: '10px', color: '#fff', display: 'flex' }}>
+                      <Bot size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '0.95rem' }}>MediSync AI Healthcare Assistant</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div className="pulse-dot" style={{ width: '6px', height: '6px' }}></div>
+                        <span>Model: MediSync Neural AI Engine 4.0 • Real-Time Engine Active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>MediSync AI Engine Connected</span>
+                </div>
+
+                {/* Chat Messages Stream */}
+                <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {chatMessages.map(msg => (
+                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
+                      <div style={{
+                        maxWidth: '82%',
+                        padding: '14px 18px',
+                        borderRadius: msg.sender === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        background: msg.sender === 'user' ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
+                        color: msg.sender === 'user' ? '#fff' : 'var(--text-main)',
+                        border: msg.sender === 'user' ? 'none' : '1px solid var(--border-color)',
+                        fontSize: '0.9rem',
+                        lineHeight: '1.5'
+                      }}>
+                        {msg.triage_level && (
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                            <span style={{ 
+                              padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem',
+                              background: msg.triage_level === 'Emergency' ? 'rgba(239,68,68,0.2)' : (msg.triage_level === 'Urgent' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'),
+                              color: msg.triage_level === 'Emergency' ? 'var(--danger)' : (msg.triage_level === 'Urgent' ? 'var(--warning)' : 'var(--success)')
+                            }}>
+                              Triage Level: {msg.triage_level}
+                            </span>
+                            <span style={{ padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', background: 'rgba(99,102,241,0.2)', color: 'var(--primary)' }}>
+                              Route to: {msg.department}
+                            </span>
+                            <span style={{ padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', background: 'rgba(56,189,248,0.2)', color: 'var(--teal-accent)' }}>
+                              Confidence: {msg.confidence}%
+                            </span>
+                          </div>
+                        )}
+
+                        <p>{msg.text}</p>
+
+                        {msg.medications && msg.medications.length > 0 && (
+                          <div style={{ marginTop: '12px', background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem' }}>
+                            <strong style={{ color: 'var(--teal-accent)', display: 'block', marginBottom: '4px' }}>Suggested Medication Protocols:</strong>
+                            <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                              {msg.medications.map((m, idx) => (
+                                <li key={idx}>{m}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px', padding: '0 4px' }}>{msg.timestamp}</span>
+                    </div>
+                  ))}
+
+                  {isAiProcessing && (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', color: 'var(--primary)', fontSize: '0.85rem' }}>
+                      <Bot size={18} className="pulse-dot" />
+                      <span>MediSync Clinical AI evaluating clinical symptoms...</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Chat Input Bar */}
+                <form onSubmit={handleSendChatMessage} style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '12px', background: 'rgba(0,0,0,0.1)' }}>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Describe clinical symptoms (e.g. 'Patient has 102F fever, severe headache, and stiff neck')..."
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    disabled={isAiProcessing}
+                    style={{ flex: 1 }}
+                  />
+                  <button type="submit" className="btn btn-primary" disabled={isAiProcessing || !chatInput.trim()}>
+                    <Send size={18} />
+                    <span>Assess Symptoms</span>
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {/* MODE 2: SUPER ADMIN & CLINICIAN LOG INSPECTION */}
+            {triageSubView === 'inspection' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Search triage logs by symptoms, triage level, patient name, or department..." 
+                    value={triageSearch}
+                    onChange={e => setTriageSearch(e.target.value)}
+                    style={{ paddingLeft: '42px' }}
+                  />
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px' }}>LOG ID</th>
+                        <th style={{ padding: '14px' }}>PATIENT LINK</th>
+                        <th style={{ padding: '14px' }}>PRESENTED SYMPTOMS</th>
+                        <th style={{ padding: '14px' }}>AI TRIAGE LEVEL</th>
+                        <th style={{ padding: '14px' }}>RECOMMENDED DEPT</th>
+                        <th style={{ padding: '14px' }}>AI CONFIDENCE</th>
+                        <th style={{ padding: '14px' }}>SUGGESTED MEDICATIONS</th>
+                        <th style={{ padding: '14px' }}>CLINICIAN OVERRIDE</th>
+                        <th style={{ padding: '14px' }}>ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTriageLogs.map(t => {
+                        const parsedMeds = typeof t.suggested_medications === 'string' 
+                          ? (JSON.parse(t.suggested_medications || '[]'))
+                          : (t.suggested_medications || []);
+                        
+                        return (
+                          <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700' }}>#{t.id}</td>
+                            <td style={{ padding: '14px' }}>
+                              {t.first_name ? (
+                                <div>
+                                  <div style={{ fontWeight: '700' }}>{t.first_name} {t.last_name}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{t.patient_code}</div>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Walk-in Patient</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '14px', maxWidth: '240px' }}>
+                              <div style={{ fontSize: '0.82rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={t.input_symptoms}>
+                                {t.input_symptoms}
+                              </div>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span style={{ 
+                                padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.82rem',
+                                background: t.suggested_triage_level === 'Emergency' ? 'rgba(239,68,68,0.2)' : (t.suggested_triage_level === 'Urgent' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'),
+                                color: t.suggested_triage_level === 'Emergency' ? 'var(--danger)' : (t.suggested_triage_level === 'Urgent' ? 'var(--warning)' : 'var(--success)')
+                              }}>
+                                {t.suggested_triage_level}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px', fontWeight: '700', color: 'var(--primary)' }}>
+                              {t.recommended_department}
+                            </td>
+                            <td style={{ padding: '14px', fontWeight: '800', color: 'var(--teal-accent)' }}>
+                              {t.ai_confidence_score}%
+                            </td>
+                            <td style={{ padding: '14px', fontSize: '0.78rem' }}>
+                              {parsedMeds.length > 0 ? (
+                                <span style={{ background: 'rgba(255,255,255,0.06)', padding: '4px 8px', borderRadius: '6px' }}>
+                                  {parsedMeds[0]} {parsedMeds.length > 1 ? `+${parsedMeds.length - 1} more` : ''}
+                                </span>
+                              ) : 'None'}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              {t.doctor_override ? (
+                                <span style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <Check size={12} />
+                                  <span>Clinician Overridden</span>
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>AI Assessed</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <button 
+                                onClick={() => { setSelectedTriageLog(t); setShowOverrideModal(true); }}
+                                className="btn btn-secondary" 
+                                style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--primary)' }}
+                              >
+                                <Stethoscope size={14} />
+                                <span>Clinician Review</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* TAB: SUPER ADMIN USER MANAGEMENT */}
         {activeTab === 'users' && (
@@ -1128,7 +1497,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         {/* TAB: MEDICINE FORMULARY CRUD */}
         {activeTab === 'medicines' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* KPI Stat Cards for Medicines */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="glass-panel" style={{ padding: '16px' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL FORMULARY MEDICINES</div>
@@ -1144,7 +1512,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               </div>
             </div>
 
-            {/* Toolbar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -1164,7 +1531,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               </button>
             </div>
 
-            {/* Medicines Data Table */}
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
@@ -1724,12 +2090,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 <div style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{user.role}</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>HOSPITAL WARDS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{departmentsList.length} Wards</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>AI TRIAGES EVALUATED</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{triageLogsList.length} Evaluations</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>FORMULARY MEDICINES</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{medicinesList.length} Cataloged</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>HOSPITAL WARDS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{departmentsList.length} Wards</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>REGISTERED PATIENTS</div>
@@ -1791,17 +2157,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
-        {/* AI Triage Tab */}
-        {activeTab === 'ai_triage' && (
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px' }}>AI Clinical Symptom Triage</h3>
-            <form onSubmit={handleRunAiTriage} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
-              <textarea className="input-field" rows={3} placeholder="Enter clinical symptoms..." value={symptomInput} onChange={e => setSymptomInput(e.target.value)} />
-              <button type="submit" className="btn btn-primary" disabled={isTriaging}>Run AI Triage</button>
-            </form>
-          </div>
-        )}
-
         {/* Database Architecture Tab */}
         {activeTab === 'schema' && (
           <div className="glass-panel" style={{ padding: '24px' }}>
@@ -1810,6 +2165,50 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
       </main>
+
+      {/* CLINICIAN TRIAGE OVERRIDE MODAL */}
+      {showOverrideModal && selectedTriageLog && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowOverrideModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '12px' }}>Clinician Triage Override #{selectedTriageLog.id}</h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              Presented Symptoms: <em>"{selectedTriageLog.input_symptoms}"</em>
+            </p>
+
+            <form onSubmit={handleDoctorOverride} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Override Triage Priority Level</label>
+                <select className="input-field" value={selectedTriageLog.suggested_triage_level} onChange={e => setSelectedTriageLog({...selectedTriageLog, suggested_triage_level: e.target.value})}>
+                  <option value="Routine">Routine - OPD Walk-in</option>
+                  <option value="Urgent">Urgent - Priority OPD Consultation</option>
+                  <option value="Emergency">Emergency - Immediate Resuscitation & ICU</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Override Destination Ward</label>
+                <select className="input-field" value={selectedTriageLog.recommended_department} onChange={e => setSelectedTriageLog({...selectedTriageLog, recommended_department: e.target.value})}>
+                  <option value="Cardiology & ICU">Cardiology & ICU</option>
+                  <option value="Neurology & Stroke Unit">Neurology & Stroke Unit</option>
+                  <option value="Pulmonology Ward">Pulmonology Ward</option>
+                  <option value="General OPD">General OPD</option>
+                  <option value="Pediatrics Ward">Pediatrics Ward</option>
+                  <option value="Orthopedics">Orthopedics</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowOverrideModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Apply Clinician Override</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* CREATE DEPARTMENT MODAL */}
       {showCreateDepartmentModal && (

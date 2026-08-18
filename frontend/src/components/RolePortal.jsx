@@ -5,7 +5,7 @@ import {
   Search, Plus, RefreshCw, Database, Server, CheckCircle2, 
   AlertCircle, ChevronRight, Stethoscope, HeartPulse, Clock,
   Bot, AlertTriangle, Sparkles, Package, Pill, Layers, FileText,
-  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator
+  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator, Send, MessageSquare, Check, Printer
 } from 'lucide-react';
 
 export default function RolePortal({ user, onLogout, theme, setTheme }) {
@@ -14,6 +14,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
   const getTabFromPath = (pathname) => {
     if (pathname.includes('/dashboard/users')) return 'users';
+    if (pathname.includes('/dashboard/departments')) return 'departments';
     if (pathname.includes('/dashboard/staff')) return 'staff';
     if (pathname.includes('/dashboard/medicines')) return 'medicines';
     if (pathname.includes('/dashboard/categories')) return 'categories';
@@ -22,26 +23,72 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     if (pathname.includes('/dashboard/batches')) return 'batches';
     if (pathname.includes('/dashboard/ai-triage')) return 'ai_triage';
     if (pathname.includes('/dashboard/patients')) return 'patients';
+    if (pathname.includes('/dashboard/appointments')) return 'appointments';
+    if (pathname.includes('/dashboard/prescriptions')) return 'prescriptions';
     if (pathname.includes('/dashboard/schema')) return 'schema';
     return user.roleKey === 'super_admin' ? 'users' : 'dashboard';
   };
 
   const [activeTab, setActiveTab] = useState(getTabFromPath(location.pathname));
-  const [searchQuery, setSearchQuery] = useState('');
   
   // Real API Data State
   const [backendStatus, setBackendStatus] = useState({ loading: true, online: false, data: null });
   const [patients, setPatients] = useState([]);
   const [batches, setBatches] = useState([]);
   const [aiRiskData, setAiRiskData] = useState([]);
-  const [aiTriageLogs, setAiTriageLogs] = useState([]);
   const [appointments, setAppointments] = useState([]);
+
+  // FEFO Medicine Batches & Inventory Transactions State
+  const [batchesList, setBatchesList] = useState([]);
+  const [batchSearch, setBatchSearch] = useState('');
+  const [batchStatusFilter, setBatchStatusFilter] = useState('all');
+  const [batchSubTab, setBatchSubTab] = useState('inventory'); // 'inventory' or 'transactions'
+  const [transactionsList, setTransactionsList] = useState([]);
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState('all');
+  const [showCreateBatchModal, setShowCreateBatchModal] = useState(false);
+  const [showEditBatchModal, setShowEditBatchModal] = useState(false);
+  const [showDeleteBatchModal, setShowDeleteBatchModal] = useState(false);
+  const [showRecordTransactionModal, setShowRecordTransactionModal] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+
+  // AI Expiry Risk & Inventory Intelligence State
+  const [aiRiskSearch, setAiRiskSearch] = useState('');
+  const [aiRiskFilter, setAiRiskFilter] = useState('all');
+  const [isGeneratingAiRisk, setIsGeneratingAiRisk] = useState(false);
+
+
+
+  // Appointments CRUD State
+  const [appointmentSearch, setAppointmentSearch] = useState('');
+  const [appointmentStatusFilter, setAppointmentStatusFilter] = useState('all');
+  const [showCreateAppointmentModal, setShowCreateAppointmentModal] = useState(false);
+  const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
+  const [showDeleteAppointmentModal, setShowDeleteAppointmentModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
+
+  // Prescriptions CRUD State
+  const [prescriptionsList, setPrescriptionsList] = useState([]);
+  const [prescriptionSearch, setPrescriptionSearch] = useState('');
+  const [prescriptionStatusFilter, setPrescriptionStatusFilter] = useState('all');
+  const [showCreatePrescriptionModal, setShowCreatePrescriptionModal] = useState(false);
+  const [showEditPrescriptionModal, setShowEditPrescriptionModal] = useState(false);
+  const [showDeletePrescriptionModal, setShowDeletePrescriptionModal] = useState(false);
+  const [showViewPrescriptionModal, setShowViewPrescriptionModal] = useState(false);
+  const [selectedPrescription, setSelectedPrescription] = useState(null);
 
   // Super Admin Users State
   const [usersList, setUsersList] = useState([]);
   const [rolesList, setRolesList] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
   const [userSearch, setUserSearch] = useState('');
+
+  // Department CRUD State
+  const [departmentSearch, setDepartmentSearch] = useState('');
+  const [showCreateDepartmentModal, setShowCreateDepartmentModal] = useState(false);
+  const [showEditDepartmentModal, setShowEditDepartmentModal] = useState(false);
+  const [showDeleteDepartmentModal, setShowDeleteDepartmentModal] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
 
   // Staff Roster CRUD State
   const [staffList, setStaffList] = useState([]);
@@ -77,6 +124,26 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [recalculatingId, setRecalculatingId] = useState(null);
   const [recalculatingAll, setRecalculatingAll] = useState(false);
 
+  // AI Triage & Chat State
+  const [triageLogsList, setTriageLogsList] = useState([]);
+  const [triageSearch, setTriageSearch] = useState('');
+  const [triageSubView, setTriageSubView] = useState('chat');
+  const [chatMessages, setChatMessages] = useState([
+    {
+      id: 1,
+      sender: 'ai',
+      text: 'Hello! I am MediSync AI Clinical Triage Assistant. Please describe your symptoms or patient presentation for instant triage evaluation, department routing, and medication recommendations.',
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    }
+  ]);
+  const [chatInput, setChatInput] = useState('');
+  const [selectedPatientForTriage, setSelectedPatientForTriage] = useState('');
+  const [isAiProcessing, setIsAiProcessing] = useState(false);
+
+  // Doctor Triage Override Modal
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [selectedTriageLog, setSelectedTriageLog] = useState(null);
+
   // User Modals
   const [showCreateUserModal, setShowCreateUserModal] = useState(false);
   const [showEditUserModal, setShowEditUserModal] = useState(false);
@@ -95,13 +162,40 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [showDeleteSupplierModal, setShowDeleteSupplierModal] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
-  // User Creation Form State
+  // Form States
+  const [prescriptionForm, setPrescriptionForm] = useState({
+    patient_id: 1, doctor_id: 1, appointment_id: '', status: 'ISSUED',
+    clinical_notes: 'Take prescribed medication after meals as directed.',
+    items: [
+      { medicine_id: 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take with plenty of water after food' }
+    ]
+  });
+
+  const [batchForm, setBatchForm] = useState({
+    medicine_id: 1, supplier_id: 1, batch_number: 'AMX-2026-N1',
+    mfd_date: '2025-06-01', exp_date: '2027-06-01', initial_quantity: 500,
+    unit_cost: 25.00, storage_location: 'Main Pharmacy Shelf - Rack A-01', status: 'available'
+  });
+
+  const [transactionForm, setTransactionForm] = useState({
+    batch_id: 1, transaction_type: 'RESTOCK', quantity: 100, notes: 'Routine stock intake'
+  });
+
+  const [appointmentForm, setAppointmentForm] = useState({
+    patient_id: 1, doctor_id: 1, appointment_date: new Date().toISOString().slice(0, 16),
+    type: 'Consultation', priority: 'Normal', status: 'Scheduled', reason: 'Routine clinical consultation'
+  });
+
+
   const [userForm, setUserForm] = useState({
     name: '', email: '', password: 'password123', role_id: 2,
     department_id: 1, phone: '+94 77 123 4567', status: 'active', specialization: 'General Care'
   });
 
-  // Staff Creation Form State
+  const [departmentForm, setDepartmentForm] = useState({
+    name: '', code: '', description: '', location_floor: 'Ground Floor - Wing A', status: 'active'
+  });
+
   const [staffForm, setStaffForm] = useState({
     first_name: '', last_name: '', email: '', password: 'password123',
     role_id: 3, department_id: 1, specialization: 'General Medicine',
@@ -109,7 +203,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     phone: '+94 77 123 4567', duty_status: 'on_duty', employee_code: ''
   });
 
-  // Patient Creation Form State
   const [patientForm, setPatientForm] = useState({
     first_name: '', last_name: '', dob: '1995-04-12', gender: 'Female',
     nic_passport: '199564501988', phone: '+94 77 555 1234', email: '',
@@ -118,26 +211,18 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     medical_history: 'Hypertension (Controlled)'
   });
 
-  // Category Creation Form State
-  const [categoryForm, setCategoryForm] = useState({
-    name: '', description: ''
-  });
+  const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
 
-  // Medicine Creation Form State
   const [medicineForm, setMedicineForm] = useState({
     brand_name: '', generic_name: '', category_id: 1, dosage_form: 'Tablet',
     unit: 'pcs', min_reorder_level: 100, max_stock_capacity: 5000,
     unit_price: 35.00, prescription_required: true, status: 'active', barcode: ''
   });
 
-  // Supplier Creation Form State
   const [supplierForm, setSupplierForm] = useState({
     company_name: '', supplier_code: '', contact_person: '',
     email: '', phone: '+94 11 234 5678', address: 'Colombo, Sri Lanka', lead_time_days: 7, rating: 4.80, status: 'active'
   });
-
-  const [symptomInput, setSymptomInput] = useState('');
-  const [isTriaging, setIsTriaging] = useState(false);
 
   useEffect(() => {
     setActiveTab(getTabFromPath(location.pathname));
@@ -147,6 +232,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setActiveTab(tabId);
     let path = '/dashboard/overview';
     if (tabId === 'users') path = '/dashboard/users';
+    else if (tabId === 'departments') path = '/dashboard/departments';
     else if (tabId === 'staff') path = '/dashboard/staff';
     else if (tabId === 'medicines') path = '/dashboard/medicines';
     else if (tabId === 'categories') path = '/dashboard/categories';
@@ -155,6 +241,8 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     else if (tabId === 'batches') path = '/dashboard/batches';
     else if (tabId === 'ai_triage') path = '/dashboard/ai-triage';
     else if (tabId === 'patients') path = '/dashboard/patients';
+    else if (tabId === 'appointments') path = '/dashboard/appointments';
+    else if (tabId === 'prescriptions') path = '/dashboard/prescriptions';
     else if (tabId === 'schema') path = '/dashboard/schema';
     
     navigate(path);
@@ -169,21 +257,17 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchPatientsData();
       fetchCategoriesData();
       fetchMedicinesData();
-
-      const batchesRes = await fetch('/api/v1/batches');
-      if (batchesRes.ok) setBatches(await batchesRes.json());
-
-      const aiRes = await fetch('/api/v1/ai/inventory-risk');
-      if (aiRes.ok) setAiRiskData(await aiRes.json());
-
-      const triageRes = await fetch('/api/v1/ai/triage');
-      if (triageRes.ok) setAiTriageLogs(await triageRes.json());
-
-      const aptsRes = await fetch('/api/v1/appointments');
-      if (aptsRes.ok) setAppointments(await aptsRes.json());
+      fetchDepartmentsData();
+      fetchTriageLogsData();
+      fetchAppointmentsData();
+      fetchPrescriptionsData();
+      fetchBatchesData();
+      fetchTransactionsData();
+      fetchAiRiskData();
 
       fetchStaffData();
       fetchSuppliersData();
+
 
       if (user.roleKey === 'super_admin') {
         fetchAdminUsersData();
@@ -191,6 +275,100 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } catch (err) {
       console.error('API Fetch error:', err);
       setBackendStatus({ loading: false, online: false, data: null });
+    }
+  };
+
+  const fetchBatchesData = async () => {
+    try {
+      const res = await fetch('/api/v1/batches');
+      if (res.ok) {
+        const data = await res.json();
+        setBatchesList(data);
+        setBatches(data);
+      }
+    } catch (err) {
+      console.error('Batches fetch error:', err);
+    }
+  };
+
+  const fetchTransactionsData = async () => {
+    try {
+      const res = await fetch('/api/v1/inventory-transactions');
+      if (res.ok) setTransactionsList(await res.json());
+    } catch (err) {
+      console.error('Transactions fetch error:', err);
+    }
+  };
+
+  const fetchAiRiskData = async () => {
+    try {
+      const res = await fetch('/api/v1/ai/inventory-risk');
+      if (res.ok) setAiRiskData(await res.json());
+    } catch (err) {
+      console.error('AI Risk fetch error:', err);
+    }
+  };
+
+  const handleTriggerAiInventoryAnalysis = async () => {
+    setIsGeneratingAiRisk(true);
+    try {
+      const res = await fetch('/api/v1/ai/generate-inventory-insights', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setAiRiskData(data.insights || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setIsGeneratingAiRisk(false);
+  };
+
+  const handleDeleteAiRiskInsight = async (id) => {
+    try {
+      const res = await fetch(`/api/v1/ai/inventory-risk/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAiRiskData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+
+
+  const fetchPrescriptionsData = async () => {
+    try {
+      const res = await fetch('/api/v1/prescriptions');
+      if (res.ok) setPrescriptionsList(await res.json());
+    } catch (err) {
+      console.error('Prescriptions fetch error:', err);
+    }
+  };
+
+  const fetchAppointmentsData = async () => {
+    try {
+      const res = await fetch('/api/v1/appointments');
+      if (res.ok) setAppointments(await res.json());
+    } catch (err) {
+      console.error('Appointments fetch error:', err);
+    }
+  };
+
+  const fetchTriageLogsData = async () => {
+    try {
+      const res = await fetch('/api/v1/ai/triage');
+      if (res.ok) setTriageLogsList(await res.json());
+    } catch (err) {
+      console.error('Triage logs fetch error:', err);
+    }
+  };
+
+  const fetchDepartmentsData = async () => {
+    try {
+      const res = await fetch('/api/v1/admin/departments');
+      if (res.ok) setDepartmentsList(await res.json());
+    } catch (err) {
+      console.error('Departments fetch error:', err);
     }
   };
 
@@ -228,9 +406,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
       const rolesRes = await fetch('/api/v1/admin/roles');
       if (rolesRes.ok) setRolesList(await rolesRes.json());
-
-      const deptsRes = await fetch('/api/v1/admin/departments');
-      if (deptsRes.ok) setDepartmentsList(await deptsRes.json());
     } catch (err) {
       console.error('Admin fetch error:', err);
     }
@@ -264,6 +439,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
     if (roleKey === 'super_admin') {
       items.push({ id: 'users', label: 'User Management', icon: UserCheck });
+      items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
+      items.push({ id: 'prescriptions', label: 'Prescriptions (Rx)', icon: FileText });
+      items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
+      items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
       items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
@@ -272,10 +451,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
       items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
-      items.push({ id: 'ai_triage', label: 'AI Patient Triage', icon: Bot });
       items.push({ id: 'schema', label: 'Database Architecture', icon: Database });
     } else {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
+      items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
+      items.push({ id: 'prescriptions', label: 'Prescriptions (Rx)', icon: FileText });
+      items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
+      items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
       items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
       items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
@@ -285,16 +467,368 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
         items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
       }
-      if (roleKey === 'doctor') {
-        items.push({ id: 'ai_triage', label: 'AI Patient Triage', icon: Bot, badge: 'Clinical' });
-        items.push({ id: 'appointments', label: 'Appointments', icon: Calendar });
-      }
     }
 
     return items;
   };
 
   const navItems = getNavItems();
+
+  // FEFO Stock Batches & Inventory Transactions Handlers
+  const handleCreateBatch = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchForm)
+      });
+      if (res.ok) {
+        setShowCreateBatchModal(false);
+        setBatchForm({
+          medicine_id: medicinesList[0]?.id || 1, supplier_id: suppliersList[0]?.id || 1,
+          batch_number: 'BATCH-' + Math.floor(1000 + Math.random() * 9000),
+          mfd_date: new Date().toISOString().slice(0, 10),
+          exp_date: new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0, 10),
+          initial_quantity: 500, unit_cost: 25.00, storage_location: 'Main Pharmacy Shelf - Rack A-01', status: 'available'
+        });
+        fetchBatchesData();
+        fetchTransactionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateBatch = async (e) => {
+    e.preventDefault();
+    if (!selectedBatch) return;
+    try {
+      const res = await fetch(`/api/v1/batches/${selectedBatch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedBatch)
+      });
+      if (res.ok) {
+        setShowEditBatchModal(false);
+        setSelectedBatch(null);
+        fetchBatchesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteBatch = async () => {
+    if (!selectedBatch) return;
+    try {
+      const res = await fetch(`/api/v1/batches/${selectedBatch.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteBatchModal(false);
+        setSelectedBatch(null);
+        fetchBatchesData();
+        fetchTransactionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRecordTransaction = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/inventory-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(transactionForm)
+      });
+      if (res.ok) {
+        setShowRecordTransactionModal(false);
+        setTransactionForm({
+          batch_id: batchesList[0]?.id || 1, transaction_type: 'RESTOCK', quantity: 100, notes: 'Routine stock movement intake'
+        });
+        fetchBatchesData();
+        fetchTransactionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Prescription Handlers
+
+  const handleAddPrescriptionItem = () => {
+    setPrescriptionForm(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        { medicine_id: medicinesList[0]?.id || 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take with water after meals' }
+      ]
+    }));
+  };
+
+  const handleRemovePrescriptionItem = (index) => {
+    setPrescriptionForm(prev => ({
+      ...prev,
+      items: prev.items.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  const handleUpdatePrescriptionItem = (index, field, value) => {
+    setPrescriptionForm(prev => {
+      const updatedItems = [...prev.items];
+      updatedItems[index] = { ...updatedItems[index], [field]: value };
+      return { ...prev, items: updatedItems };
+    });
+  };
+
+  const handleCreatePrescription = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/prescriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prescriptionForm)
+      });
+      if (res.ok) {
+        setShowCreatePrescriptionModal(false);
+        setPrescriptionForm({
+          patient_id: patients[0]?.id || 1, doctor_id: staffList[0]?.id || 1, appointment_id: '', status: 'ISSUED',
+          clinical_notes: 'Take prescribed medication after meals as directed.',
+          items: [
+            { medicine_id: medicinesList[0]?.id || 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take with plenty of water after food' }
+          ]
+        });
+        fetchPrescriptionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdatePrescription = async (e) => {
+    e.preventDefault();
+    if (!selectedPrescription) return;
+    try {
+      const res = await fetch(`/api/v1/prescriptions/${selectedPrescription.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedPrescription)
+      });
+      if (res.ok) {
+        setShowEditPrescriptionModal(false);
+        setSelectedPrescription(null);
+        fetchPrescriptionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeletePrescription = async () => {
+    if (!selectedPrescription) return;
+    try {
+      const res = await fetch(`/api/v1/prescriptions/${selectedPrescription.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeletePrescriptionModal(false);
+        setSelectedPrescription(null);
+        fetchPrescriptionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleOpenRxForAppointment = (apt) => {
+    setPrescriptionForm({
+      patient_id: apt.patient_id,
+      doctor_id: apt.doctor_id,
+      appointment_id: apt.id,
+      status: 'ISSUED',
+      clinical_notes: `Prescription issued following ${apt.type} appointment on ${apt.appointment_date}. Reason: ${apt.reason || 'Clinical Consultation'}.`,
+      items: [
+        { medicine_id: medicinesList[0]?.id || 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take after meals as prescribed' }
+      ]
+    });
+    setShowCreatePrescriptionModal(true);
+  };
+
+  // Appointment Handlers
+  const handleCreateAppointment = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appointmentForm)
+      });
+      if (res.ok) {
+        setShowCreateAppointmentModal(false);
+        setAppointmentForm({
+          patient_id: patients[0]?.id || 1, doctor_id: staffList[0]?.id || 1,
+          appointment_date: new Date().toISOString().slice(0, 16),
+          type: 'Consultation', priority: 'Normal', status: 'Scheduled', reason: 'Clinical evaluation'
+        });
+        fetchAppointmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateAppointment = async (e) => {
+    e.preventDefault();
+    if (!selectedAppointment) return;
+    try {
+      const res = await fetch(`/api/v1/appointments/${selectedAppointment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedAppointment)
+      });
+      if (res.ok) {
+        setShowEditAppointmentModal(false);
+        setSelectedAppointment(null);
+        fetchAppointmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteAppointment = async () => {
+    if (!selectedAppointment) return;
+    try {
+      const res = await fetch(`/api/v1/appointments/${selectedAppointment.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteAppointmentModal(false);
+        setSelectedAppointment(null);
+        fetchAppointmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // AI Chat & Triage Handlers
+  const handleSendChatMessage = async (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isAiProcessing) return;
+
+    const userText = chatInput.trim();
+    const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    const userMsg = { id: Date.now(), sender: 'user', text: userText, timestamp: nowTime };
+    setChatMessages(prev => [...prev, userMsg]);
+    setChatInput('');
+    setIsAiProcessing(true);
+
+    try {
+      const res = await fetch('/api/v1/ai/triage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          input_symptoms: userText,
+          patient_id: selectedPatientForTriage ? parseInt(selectedPatientForTriage) : null
+        })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const aiMsg = {
+          id: Date.now() + 1,
+          sender: 'ai',
+          text: data.ai_response || data.clinical_summary,
+          triage_level: data.suggested_triage_level,
+          department: data.recommended_department,
+          confidence: data.ai_confidence_score,
+          medications: data.suggested_medications,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setChatMessages(prev => [...prev, aiMsg]);
+        fetchTriageLogsData();
+      }
+    } catch (err) {
+      console.error('AI Clinical API error:', err);
+      setChatMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        sender: 'ai',
+        text: 'Error connecting to Clinical AI Engine. Please check system logs.',
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }]);
+    }
+    setIsAiProcessing(false);
+  };
+
+  const handleDoctorOverride = async (e) => {
+    e.preventDefault();
+    if (!selectedTriageLog) return;
+    try {
+      const res = await fetch(`/api/v1/ai/triage/${selectedTriageLog.id}/override`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedTriageLog)
+      });
+      if (res.ok) {
+        setShowOverrideModal(false);
+        setSelectedTriageLog(null);
+        fetchTriageLogsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Department Handlers
+  const handleCreateDepartment = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/admin/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(departmentForm)
+      });
+      if (res.ok) {
+        setShowCreateDepartmentModal(false);
+        setDepartmentForm({ name: '', code: '', description: '', location_floor: 'Ground Floor - Wing A', status: 'active' });
+        fetchDepartmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateDepartment = async (e) => {
+    e.preventDefault();
+    if (!selectedDepartment) return;
+    try {
+      const res = await fetch(`/api/v1/admin/departments/${selectedDepartment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedDepartment)
+      });
+      if (res.ok) {
+        setShowEditDepartmentModal(false);
+        setSelectedDepartment(null);
+        fetchDepartmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!selectedDepartment) return;
+    try {
+      const res = await fetch(`/api/v1/admin/departments/${selectedDepartment.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteDepartmentModal(false);
+        setSelectedDepartment(null);
+        fetchDepartmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // User Handlers
   const handleCreateUser = async (e) => {
@@ -373,6 +907,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         });
         fetchStaffData();
         fetchAdminUsersData();
+        fetchDepartmentsData();
       }
     } catch (err) {
       console.error(err);
@@ -393,6 +928,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         setSelectedStaff(null);
         fetchStaffData();
         fetchAdminUsersData();
+        fetchDepartmentsData();
       }
     } catch (err) {
       console.error(err);
@@ -408,6 +944,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         setSelectedStaff(null);
         fetchStaffData();
         fetchAdminUsersData();
+        fetchDepartmentsData();
       }
     } catch (err) {
       console.error(err);
@@ -661,33 +1198,51 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setRecalculatingAll(false);
   };
 
-  const handleRunAiTriage = (e) => {
-    e.preventDefault();
-    if (!symptomInput.trim()) return;
-    setIsTriaging(true);
-    setTimeout(() => {
-      const isEmergency = symptomInput.toLowerCase().includes('chest') || symptomInput.toLowerCase().includes('breath');
-      const result = {
-        id: Date.now(),
-        patient_code: 'PAT-2026-WALKIN',
-        first_name: 'Walk-in Patient',
-        last_name: '',
-        input_symptoms: symptomInput,
-        suggested_triage_level: isEmergency ? 'Emergency' : 'Routine',
-        recommended_department: isEmergency ? 'Cardiology & ICU' : 'General OPD',
-        ai_confidence_score: isEmergency ? 96.8 : 89.4,
-        created_at: new Date().toISOString()
-      };
-      setAiTriageLogs([result, ...aiTriageLogs]);
-      setIsTriaging(false);
-      setSymptomInput('');
-    }, 1000);
-  };
+  const filteredPrescriptions = prescriptionsList.filter(rx => {
+    const matchesSearch = 
+      (rx.prescription_code && rx.prescription_code.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.patient_name && rx.patient_name.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.patient_code && rx.patient_code.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.doctor_name && rx.doctor_name.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.clinical_notes && rx.clinical_notes.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.items && rx.items.some(item => item.brand_name.toLowerCase().includes(prescriptionSearch.toLowerCase()) || item.generic_name.toLowerCase().includes(prescriptionSearch.toLowerCase())));
+
+    if (prescriptionStatusFilter === 'all') return matchesSearch;
+    return matchesSearch && rx.status === prescriptionStatusFilter;
+  });
+
+  const filteredAppointments = appointments.filter(a => {
+    const matchesSearch = 
+      (a.patient_name && a.patient_name.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.patient_code && a.patient_code.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.doctor_name && a.doctor_name.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.specialization && a.specialization.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.reason && a.reason.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.type && a.type.toLowerCase().includes(appointmentSearch.toLowerCase()));
+
+    if (appointmentStatusFilter === 'all') return matchesSearch;
+    return matchesSearch && a.status === appointmentStatusFilter;
+  });
 
   const filteredUsers = usersList.filter(u => 
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
     (u.role_name && u.role_name.toLowerCase().includes(userSearch.toLowerCase()))
+  );
+
+  const filteredTriageLogs = triageLogsList.filter(t => 
+    t.input_symptoms.toLowerCase().includes(triageSearch.toLowerCase()) ||
+    t.suggested_triage_level.toLowerCase().includes(triageSearch.toLowerCase()) ||
+    t.recommended_department.toLowerCase().includes(triageSearch.toLowerCase()) ||
+    (t.first_name && `${t.first_name} ${t.last_name}`.toLowerCase().includes(triageSearch.toLowerCase())) ||
+    (t.patient_code && t.patient_code.toLowerCase().includes(triageSearch.toLowerCase()))
+  );
+
+  const filteredDepartments = departmentsList.filter(d => 
+    d.name.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+    d.code.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+    (d.description && d.description.toLowerCase().includes(departmentSearch.toLowerCase())) ||
+    (d.location_floor && d.location_floor.toLowerCase().includes(departmentSearch.toLowerCase()))
   );
 
   const filteredStaff = staffList.filter(s => {
@@ -728,10 +1283,85 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     (s.contact_person && s.contact_person.toLowerCase().includes(supplierSearch.toLowerCase()))
   );
 
+
+  const filteredBatches = batchesList.filter(b => {
+    const matchesSearch = 
+      b.batch_number.toLowerCase().includes(batchSearch.toLowerCase()) ||
+      b.brand_name.toLowerCase().includes(batchSearch.toLowerCase()) ||
+      b.generic_name.toLowerCase().includes(batchSearch.toLowerCase()) ||
+      (b.storage_location && b.storage_location.toLowerCase().includes(batchSearch.toLowerCase())) ||
+      (b.supplier_name && b.supplier_name.toLowerCase().includes(batchSearch.toLowerCase()));
+
+    if (batchStatusFilter === 'all') return matchesSearch;
+    return matchesSearch && b.status === batchStatusFilter;
+  });
+
+  const filteredAiRiskData = aiRiskData.filter(item => {
+    const matchesSearch = 
+      (item.brand_name && item.brand_name.toLowerCase().includes(aiRiskSearch.toLowerCase())) ||
+      (item.generic_name && item.generic_name.toLowerCase().includes(aiRiskSearch.toLowerCase())) ||
+      (item.batch_number && item.batch_number.toLowerCase().includes(aiRiskSearch.toLowerCase())) ||
+      (item.ai_recommendation && item.ai_recommendation.toLowerCase().includes(aiRiskSearch.toLowerCase()));
+
+    const score = parseFloat(item.expiry_risk_score) || 0;
+    if (aiRiskFilter === 'critical') return matchesSearch && score >= 80;
+    if (aiRiskFilter === 'moderate') return matchesSearch && score >= 40 && score < 80;
+    if (aiRiskFilter === 'low') return matchesSearch && score < 40;
+    return matchesSearch;
+  });
+
+  const criticalRiskCount = aiRiskData.filter(i => (parseFloat(i.expiry_risk_score) || 0) >= 80).length;
+  const totalPredictedDemand = aiRiskData.reduce((acc, curr) => acc + (parseInt(curr.predicted_demand_30d) || 0), 0);
+  const avgAiConfidence = aiRiskData.length > 0
+    ? (aiRiskData.reduce((acc, curr) => acc + (parseFloat(curr.confidence_score) || 0), 0) / aiRiskData.length).toFixed(1)
+    : '95.0';
+
+
+  const filteredTransactions = transactionsList.filter(t => {
+    const matchesSearch = 
+      (t.reference_no && t.reference_no.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.batch_number && t.batch_number.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.brand_name && t.brand_name.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.notes && t.notes.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.user_name && t.user_name.toLowerCase().includes(transactionSearch.toLowerCase()));
+
+    if (transactionTypeFilter === 'all') return matchesSearch;
+    return matchesSearch && t.transaction_type === transactionTypeFilter;
+  });
+
+  // Batch Counters
+  const totalStockUnits = batchesList.reduce((acc, curr) => acc + (parseInt(curr.current_quantity) || 0), 0);
+  const availableBatchesCount = batchesList.filter(b => b.status === 'available').length;
+  const lowBatchesCount = batchesList.filter(b => b.status === 'low').length;
+  const expiredBatchesCount = batchesList.filter(b => b.status === 'expired' || b.exp_date < new Date().toISOString().slice(0, 10)).length;
+
+  // Prescription Counters
+
+  const issuedRxCount = prescriptionsList.filter(r => r.status === 'ISSUED').length;
+  const dispensedRxCount = prescriptionsList.filter(r => r.status === 'DISPENSED').length;
+  const draftRxCount = prescriptionsList.filter(r => r.status === 'DRAFT').length;
+
+  // Appointment Counters
+  const scheduledCount = appointments.filter(a => a.status === 'Scheduled').length;
+  const inProgressCount = appointments.filter(a => a.status === 'In_Progress').length;
+  const emergencyPriorityCount = appointments.filter(a => a.priority === 'Emergency' || a.priority === 'High').length;
+  const completedCount = appointments.filter(a => a.status === 'Completed').length;
+
+  // Triage Counters
+  const emergencyTriageCount = triageLogsList.filter(t => t.suggested_triage_level === 'Emergency').length;
+  const urgentTriageCount = triageLogsList.filter(t => t.suggested_triage_level === 'Urgent').length;
+  const avgConfidenceScore = triageLogsList.length > 0
+    ? (triageLogsList.reduce((acc, curr) => acc + (parseFloat(curr.ai_confidence_score) || 0), 0) / triageLogsList.length).toFixed(1)
+    : '94.5';
+
   // Duty Status Counters
   const onDutyCount = staffList.filter(s => s.duty_status === 'on_duty').length;
   const offDutyCount = staffList.filter(s => s.duty_status === 'off_duty').length;
   const onLeaveCount = staffList.filter(s => s.duty_status === 'on_leave').length;
+
+  // Department Counters
+  const activeDepartmentsCount = departmentsList.filter(d => d.status === 'active').length;
+  const totalStaffAssignedCount = departmentsList.reduce((acc, curr) => acc + (parseInt(curr.staff_count) || 0), 0);
 
   // Medicine Counters
   const rxRequiredCount = medicinesList.filter(m => m.prescription_required).length;
@@ -827,11 +1457,19 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           <div>
             <h1 style={{ fontSize: '1.7rem', fontWeight: '800' }}>
               {activeTab === 'users' ? 'User Management Directory' : (
-                activeTab === 'staff' ? 'Hospital Staff Roster' : (
-                  activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
-                    activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
-                      activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
-                        activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                activeTab === 'appointments' ? 'Clinical Appointments & Patient Consultations' : (
+                  activeTab === 'prescriptions' ? 'Clinical Prescriptions (Rx) Management' : (
+                    activeTab === 'ai_triage' ? 'MediSync AI Clinical Symptom Triage & Chat' : (
+                      activeTab === 'departments' ? 'Hospital Departments & Wards' : (
+                        activeTab === 'staff' ? 'Hospital Staff Roster' : (
+                          activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
+                            activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
+                              activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
+                                activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                              )
+                            )
+                          )
+                        )
                       )
                     )
                   )
@@ -853,6 +1491,624 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             </button>
           </div>
         </header>
+
+        {/* TAB: CLINICAL PRESCRIPTIONS (RX) CRUD */}
+        {activeTab === 'prescriptions' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL RX PRESCRIPTIONS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{prescriptionsList.length} Prescriptions</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ISSUED / ACTIVE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{issuedRxCount} Active Rx</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>DISPENSED BY PHARMACY</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{dispensedRxCount} Dispensed</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>DRAFT / PENDING</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{draftRxCount} Drafts</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search by Rx code, patient name, doctor, notes, or prescribed medicine..." 
+                  value={prescriptionSearch}
+                  onChange={e => setPrescriptionSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                {[
+                  { id: 'all', label: 'All Statuses' },
+                  { id: 'ISSUED', label: 'Issued' },
+                  { id: 'DISPENSED', label: 'Dispensed' },
+                  { id: 'DRAFT', label: 'Draft' },
+                  { id: 'CANCELLED', label: 'Cancelled' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setPrescriptionStatusFilter(f.id)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      background: prescriptionStatusFilter === f.id ? 'var(--primary)' : 'transparent',
+                      color: prescriptionStatusFilter === f.id ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => setShowCreatePrescriptionModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <FileText size={18} />
+                <span>Issue New Prescription</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>RX CODE / DATE</th>
+                    <th style={{ padding: '14px' }}>PATIENT (EHR)</th>
+                    <th style={{ padding: '14px' }}>PRESCRIBING DOCTOR</th>
+                    <th style={{ padding: '14px' }}>LINKED APPOINTMENT</th>
+                    <th style={{ padding: '14px' }}>PRESCRIBED MEDICATIONS</th>
+                    <th style={{ padding: '14px' }}>STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPrescriptions.map(rx => {
+                    const hasAllergies = rx.allergies && rx.allergies.toLowerCase() !== 'none' && rx.allergies.toLowerCase() !== 'none reported';
+                    return (
+                      <tr key={rx.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '800', color: 'var(--primary)', fontFamily: 'monospace' }}>{rx.prescription_code}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            {rx.issued_at ? new Date(rx.issued_at).toLocaleDateString() : 'Draft'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '700' }}>{rx.patient_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{rx.patient_code}</div>
+                          {hasAllergies && (
+                            <div style={{ marginTop: '4px' }}>
+                              <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '700' }}>
+                                ⚠️ Allergy: {rx.allergies}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '700' }}>Dr. {rx.doctor_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{rx.specialization || 'General Care'} ({rx.department_name || 'OPD'})</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          {rx.appointment_id ? (
+                            <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                              Appt #{rx.appointment_id} ({rx.appointment_type || 'Consultation'})
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Direct Clinical Rx</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px', maxWidth: '240px' }}>
+                          {rx.items && rx.items.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {rx.items.slice(0, 2).map((item, idx) => (
+                                <div key={idx} style={{ fontSize: '0.8rem', fontWeight: '600' }}>
+                                  • {item.brand_name} ({item.dosage}) - <em>{item.frequency}</em>
+                                </div>
+                              ))}
+                              {rx.items.length > 2 && (
+                                <span style={{ fontSize: '0.72rem', color: 'var(--teal-accent)', fontWeight: '700' }}>
+                                  +{rx.items.length - 2} additional items...
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>No items listed</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <span className={`badge ${
+                            rx.status === 'DISPENSED' ? 'badge-success' : (rx.status === 'ISSUED' ? 'badge-primary' : (rx.status === 'DRAFT' ? 'badge-warning' : 'badge-danger'))
+                          }`}>
+                            {rx.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button 
+                              onClick={() => { setSelectedPrescription(rx); setShowViewPrescriptionModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
+                              title="View & Print Prescription Slip"
+                            >
+                              <Printer size={13} />
+                              <span>View Slip</span>
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedPrescription(rx); setShowEditPrescriptionModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                            >
+                              <Edit size={13} />
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedPrescription(rx); setShowDeletePrescriptionModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: CLINICAL APPOINTMENTS & CONSULTATIONS */}
+        {activeTab === 'appointments' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL APPOINTMENTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{appointments.length} Booked</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>SCHEDULED / IN PROGRESS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="pulse-dot"></div>
+                  <span>{scheduledCount + inProgressCount} Active</span>
+                </div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>HIGH / EMERGENCY PRIORITY</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{emergencyPriorityCount} Priority</span>
+                </div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>COMPLETED CONSULTATIONS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{completedCount} Completed</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search appointments by patient, doctor, specialization, reason, or consultation type..." 
+                  value={appointmentSearch}
+                  onChange={e => setAppointmentSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                {[
+                  { id: 'all', label: 'All Statuses' },
+                  { id: 'Scheduled', label: 'Scheduled' },
+                  { id: 'In_Progress', label: 'In Progress' },
+                  { id: 'Completed', label: 'Completed' },
+                  { id: 'Cancelled', label: 'Cancelled' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setAppointmentStatusFilter(f.id)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      background: appointmentStatusFilter === f.id ? 'var(--primary)' : 'transparent',
+                      color: appointmentStatusFilter === f.id ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => setShowCreateAppointmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Calendar size={18} />
+                <span>Book New Appointment</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>APPOINTMENT DATE & TIME</th>
+                    <th style={{ padding: '14px' }}>PATIENT (EHR)</th>
+                    <th style={{ padding: '14px' }}>ATTENDING CLINICIAN</th>
+                    <th style={{ padding: '14px' }}>CONSULTATION TYPE</th>
+                    <th style={{ padding: '14px' }}>PRIORITY</th>
+                    <th style={{ padding: '14px' }}>CLINICAL REASON</th>
+                    <th style={{ padding: '14px' }}>STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAppointments.map(a => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Clock size={14} />
+                          <span>{new Date(a.appointment_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Booking #{a.id}</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700' }}>{a.patient_name}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{a.patient_code} • {a.blood_group || 'O+'}</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700' }}>Dr. {a.doctor_name}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.specialization || 'General Care'} ({a.department_name || 'OPD'})</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                          {a.type}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ 
+                          padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.78rem',
+                          background: a.priority === 'Emergency' || a.priority === 'High' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                          color: a.priority === 'Emergency' || a.priority === 'High' ? 'var(--danger)' : 'var(--success)'
+                        }}>
+                          {a.priority}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', maxWidth: '220px' }}>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={a.reason}>
+                          {a.reason || 'Routine consultation.'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span className={`badge ${
+                          a.status === 'Completed' ? 'badge-success' : (a.status === 'In_Progress' || a.status === 'Scheduled' ? 'badge-primary' : 'badge-warning')
+                        }`} style={{ textTransform: 'capitalize' }}>
+                          {a.status ? a.status.replace('_', ' ') : 'Scheduled'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button 
+                            onClick={() => handleOpenRxForAppointment(a)}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
+                            title="Issue Rx Prescription for this appointment"
+                          >
+                            <FileText size={13} />
+                            <span>Issue Rx</span>
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedAppointment(a); setShowEditAppointmentModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                          >
+                            <Edit size={13} />
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedAppointment(a); setShowDeleteAppointmentModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: MEDISYNC AI CLINICAL TRIAGE & INTERACTIVE CHAT */}
+        {activeTab === 'ai_triage' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL TRIAGE ASSESSMENTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{triageLogsList.length} Evaluations</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>EMERGENCY CASES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{emergencyTriageCount} Critical</span>
+                </div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>URGENT CASES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{urgentTriageCount} Priority</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CLINICAL AI CONFIDENCE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{avgConfidenceScore}% Avg</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                <button
+                  onClick={() => setTriageSubView('chat')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: triageSubView === 'chat' ? 'var(--primary)' : 'transparent',
+                    color: triageSubView === 'chat' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <MessageSquare size={16} />
+                  <span>Interactive AI Clinical Chat</span>
+                </button>
+                <button
+                  onClick={() => setTriageSubView('inspection')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: triageSubView === 'inspection' ? 'var(--primary)' : 'transparent',
+                    color: triageSubView === 'inspection' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <ShieldCheck size={16} />
+                  <span>Clinician Log Inspection ({triageLogsList.length})</span>
+                </button>
+              </div>
+
+              {triageSubView === 'chat' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <span style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>Link Patient EHR:</span>
+                  <select 
+                    className="input-field" 
+                    value={selectedPatientForTriage} 
+                    onChange={e => setSelectedPatientForTriage(e.target.value)}
+                    style={{ width: '220px', padding: '6px 12px', fontSize: '0.82rem' }}
+                  >
+                    <option value="">Walk-in / Unlinked Patient</option>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {triageSubView === 'chat' && (
+              <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '540px', padding: '0', overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.15)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ background: 'var(--primary)', padding: '8px', borderRadius: '10px', color: '#fff', display: 'flex' }}>
+                      <Bot size={20} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: '800', fontSize: '0.95rem' }}>MediSync AI Healthcare Assistant</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <div className="pulse-dot" style={{ width: '6px', height: '6px' }}></div>
+                        <span>Model: MediSync Neural AI Engine 4.0 • Real-Time Engine Active</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>MediSync AI Engine Connected</span>
+                </div>
+
+                <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {chatMessages.map(msg => (
+                    <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
+                      <div style={{
+                        maxWidth: '82%',
+                        padding: '14px 18px',
+                        borderRadius: msg.sender === 'user' ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        background: msg.sender === 'user' ? 'var(--primary)' : 'rgba(255,255,255,0.06)',
+                        color: msg.sender === 'user' ? '#fff' : 'var(--text-main)',
+                        border: msg.sender === 'user' ? 'none' : '1px solid var(--border-color)',
+                        fontSize: '0.9rem',
+                        lineHeight: '1.5'
+                      }}>
+                        {msg.triage_level && (
+                          <div style={{ display: 'flex', gap: '8px', marginBottom: '10px', flexWrap: 'wrap' }}>
+                            <span style={{ 
+                              padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem',
+                              background: msg.triage_level === 'Emergency' ? 'rgba(239,68,68,0.2)' : (msg.triage_level === 'Urgent' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'),
+                              color: msg.triage_level === 'Emergency' ? 'var(--danger)' : (msg.triage_level === 'Urgent' ? 'var(--warning)' : 'var(--success)')
+                            }}>
+                              Triage Level: {msg.triage_level}
+                            </span>
+                            <span style={{ padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', background: 'rgba(99,102,241,0.2)', color: 'var(--primary)' }}>
+                              Route to: {msg.department}
+                            </span>
+                            <span style={{ padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', background: 'rgba(56,189,248,0.2)', color: 'var(--teal-accent)' }}>
+                              Confidence: {msg.confidence}%
+                            </span>
+                          </div>
+                        )}
+
+                        <p>{msg.text}</p>
+
+                        {msg.medications && msg.medications.length > 0 && (
+                          <div style={{ marginTop: '12px', background: 'rgba(0,0,0,0.2)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem' }}>
+                            <strong style={{ color: 'var(--teal-accent)', display: 'block', marginBottom: '4px' }}>Suggested Medication Protocols:</strong>
+                            <ul style={{ margin: 0, paddingLeft: '18px' }}>
+                              {msg.medications.map((m, idx) => (
+                                <li key={idx}>{m}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px', padding: '0 4px' }}>{msg.timestamp}</span>
+                    </div>
+                  ))}
+
+                  {isAiProcessing && (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', color: 'var(--primary)', fontSize: '0.85rem' }}>
+                      <Bot size={18} className="pulse-dot" />
+                      <span>MediSync Clinical AI evaluating clinical symptoms...</span>
+                    </div>
+                  )}
+                </div>
+
+                <form onSubmit={handleSendChatMessage} style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '12px', background: 'rgba(0,0,0,0.1)' }}>
+                  <input
+                    type="text"
+                    className="input-field"
+                    placeholder="Describe clinical symptoms (e.g. 'Patient has 102F fever, severe headache, and stiff neck')..."
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    disabled={isAiProcessing}
+                    style={{ flex: 1 }}
+                  />
+                  <button type="submit" className="btn btn-primary" disabled={isAiProcessing || !chatInput.trim()}>
+                    <Send size={18} />
+                    <span>Assess Symptoms</span>
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {triageSubView === 'inspection' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input 
+                    type="text" 
+                    className="input-field" 
+                    placeholder="Search triage logs by symptoms, triage level, patient name, or department..." 
+                    value={triageSearch}
+                    onChange={e => setTriageSearch(e.target.value)}
+                    style={{ paddingLeft: '42px' }}
+                  />
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px' }}>LOG ID</th>
+                        <th style={{ padding: '14px' }}>PATIENT LINK</th>
+                        <th style={{ padding: '14px' }}>PRESENTED SYMPTOMS</th>
+                        <th style={{ padding: '14px' }}>AI TRIAGE LEVEL</th>
+                        <th style={{ padding: '14px' }}>RECOMMENDED DEPT</th>
+                        <th style={{ padding: '14px' }}>AI CONFIDENCE</th>
+                        <th style={{ padding: '14px' }}>SUGGESTED MEDICATIONS</th>
+                        <th style={{ padding: '14px' }}>CLINICIAN OVERRIDE</th>
+                        <th style={{ padding: '14px' }}>ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTriageLogs.map(t => {
+                        const parsedMeds = typeof t.suggested_medications === 'string' 
+                          ? (JSON.parse(t.suggested_medications || '[]'))
+                          : (t.suggested_medications || []);
+                        
+                        return (
+                          <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700' }}>#{t.id}</td>
+                            <td style={{ padding: '14px' }}>
+                              {t.first_name ? (
+                                <div>
+                                  <div style={{ fontWeight: '700' }}>{t.first_name} {t.last_name}</div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{t.patient_code}</div>
+                                </div>
+                              ) : (
+                                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Walk-in Patient</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '14px', maxWidth: '240px' }}>
+                              <div style={{ fontSize: '0.82rem', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={t.input_symptoms}>
+                                {t.input_symptoms}
+                              </div>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span style={{ 
+                                padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.82rem',
+                                background: t.suggested_triage_level === 'Emergency' ? 'rgba(239,68,68,0.2)' : (t.suggested_triage_level === 'Urgent' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'),
+                                color: t.suggested_triage_level === 'Emergency' ? 'var(--danger)' : (t.suggested_triage_level === 'Urgent' ? 'var(--warning)' : 'var(--success)')
+                              }}>
+                                {t.suggested_triage_level}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px', fontWeight: '700', color: 'var(--primary)' }}>
+                              {t.recommended_department}
+                            </td>
+                            <td style={{ padding: '14px', fontWeight: '800', color: 'var(--teal-accent)' }}>
+                              {t.ai_confidence_score}%
+                            </td>
+                            <td style={{ padding: '14px', fontSize: '0.78rem' }}>
+                              {parsedMeds.length > 0 ? (
+                                <span style={{ background: 'rgba(255,255,255,0.06)', padding: '4px 8px', borderRadius: '6px' }}>
+                                  {parsedMeds[0]} {parsedMeds.length > 1 ? `+${parsedMeds.length - 1} more` : ''}
+                                </span>
+                              ) : 'None'}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              {t.doctor_override ? (
+                                <span style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                                  <Check size={12} />
+                                  <span>Clinician Overridden</span>
+                                </span>
+                              ) : (
+                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>AI Assessed</span>
+                              )}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <button 
+                                onClick={() => { setSelectedTriageLog(t); setShowOverrideModal(true); }}
+                                className="btn btn-secondary" 
+                                style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--primary)' }}
+                              >
+                                <Stethoscope size={14} />
+                                <span>Clinician Review</span>
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* TAB: SUPER ADMIN USER MANAGEMENT */}
         {activeTab === 'users' && (
@@ -936,10 +2192,107 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
+        {/* TAB: HOSPITAL DEPARTMENTS & WARDS CRUD */}
+        {activeTab === 'departments' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL HOSPITAL WARDS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{departmentsList.length} Departments</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ACTIVE WARDS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{activeDepartmentsCount} Operational</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>STAFF ASSIGNED</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{totalStaffAssignedCount} Medical Staff</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search department by name, code, description, or floor location..." 
+                  value={departmentSearch}
+                  onChange={e => setDepartmentSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <button onClick={() => setShowCreateDepartmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Building2 size={18} />
+                <span>Add New Department</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>CODE</th>
+                    <th style={{ padding: '14px' }}>DEPARTMENT / WARD NAME</th>
+                    <th style={{ padding: '14px' }}>FLOOR LOCATION</th>
+                    <th style={{ padding: '14px' }}>DESCRIPTION</th>
+                    <th style={{ padding: '14px' }}>STAFF ASSIGNED</th>
+                    <th style={{ padding: '14px' }}>STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDepartments.map(d => (
+                    <tr key={d.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>{d.code}</td>
+                      <td style={{ padding: '14px', fontWeight: '700' }}>{d.name}</td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--teal-accent)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.82rem' }}>
+                          {d.location_floor || 'Ground Floor'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', color: 'var(--text-muted)' }}>{d.description || 'No detailed description.'}</td>
+                      <td style={{ padding: '14px' }}>
+                        <span className="badge badge-primary">
+                          {d.staff_count || 0} Staff
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span className={`badge ${d.status === 'active' ? 'badge-success' : 'badge-warning'}`}>
+                          {d.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => { setSelectedDepartment(d); setShowEditDepartmentModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                          >
+                            <Edit size={14} />
+                            <span>Edit</span>
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedDepartment(d); setShowDeleteDepartmentModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* TAB: MEDICINE FORMULARY CRUD */}
         {activeTab === 'medicines' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* KPI Stat Cards for Medicines */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="glass-panel" style={{ padding: '16px' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL FORMULARY MEDICINES</div>
@@ -955,7 +2308,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               </div>
             </div>
 
-            {/* Toolbar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -975,7 +2327,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               </button>
             </div>
 
-            {/* Medicines Data Table */}
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
@@ -1535,83 +2886,500 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 <div style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{user.role}</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>FORMULARY MEDICINES</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{medicinesList.length} Cataloged</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>AI TRIAGES EVALUATED</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{triageLogsList.length} Evaluations</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>MEDICINE CATEGORIES</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{categoriesList.length} Categories</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>HOSPITAL WARDS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{departmentsList.length} Wards</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>REGISTERED PATIENTS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{patients.length} Patients</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{patients.length} Patients</div>
               </div>
             </div>
           </div>
         )}
 
-        {/* AI Expiry Risk Tab */}
+        {/* TAB: AI EXPIRY & FEFO RISK (POWERED BY GROQ AI) */}
         {activeTab === 'ai_risk' && (
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Sparkles size={22} color="var(--primary)" />
-              AI-Driven FEFO Expiry & Demand Forecasts
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {aiRiskData.map(item => (
-                <div key={item.id} className="glass-panel" style={{ padding: '20px', borderLeft: '5px solid var(--danger)' }}>
-                  <h4 style={{ fontSize: '1.1rem', fontWeight: '700' }}>{item.brand_name} ({item.generic_name})</h4>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '4px 0 12px' }}>
-                    Batch: <strong>{item.batch_number}</strong> • Expiry Date: <strong style={{ color: 'var(--warning)' }}>{item.exp_date}</strong> • Expiry Risk Score: <strong style={{ color: 'var(--danger)' }}>{item.expiry_risk_score}%</strong>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px', fontSize: '0.88rem' }}>
-                    <strong>AI Recommendation:</strong> {item.ai_recommendation}
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL AI INSIGHTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{aiRiskData.length} Evaluations</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CRITICAL EXPIRY RISKS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{criticalRiskCount} High Risk</span>
                 </div>
-              ))}
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>30-DAY DEMAND FORECAST</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{totalPredictedDemand} Units</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>GROQ AI CONFIDENCE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{avgAiConfidence}% Avg</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search AI insights by medicine name, batch number, or clinical recommendation..." 
+                  value={aiRiskSearch}
+                  onChange={e => setAiRiskSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                {[
+                  { id: 'all', label: 'All Risks' },
+                  { id: 'critical', label: 'Critical (>80%)' },
+                  { id: 'moderate', label: 'Moderate (50-80%)' },
+                  { id: 'low', label: 'Low Risk (<50%)' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setAiRiskFilter(f.id)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      background: aiRiskFilter === f.id ? 'var(--primary)' : 'transparent',
+                      color: aiRiskFilter === f.id ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button 
+                onClick={handleTriggerAiInventoryAnalysis} 
+                className="btn btn-primary" 
+                disabled={isGeneratingAiRisk}
+                style={{ flexShrink: 0 }}
+              >
+                <Sparkles size={18} className={isGeneratingAiRisk ? 'pulse-dot' : ''} />
+                <span>{isGeneratingAiRisk ? 'Groq AI Analyzing FEFO Stock...' : '⚡ Run Groq AI Inventory Analysis'}</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {filteredAiRiskData.map(item => {
+                const riskScore = parseFloat(item.expiry_risk_score) || 0;
+                const isCritical = riskScore >= 80;
+                const isModerate = riskScore >= 40 && riskScore < 80;
+                const borderColor = isCritical ? 'var(--danger)' : (isModerate ? 'var(--warning)' : 'var(--success)');
+
+                return (
+                  <div key={item.id} className="glass-panel" style={{ padding: '22px', borderLeft: `6px solid ${borderColor}`, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '1.2rem', fontWeight: '800' }}>{item.brand_name}</h3>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>({item.generic_name}) • {item.dosage_form || 'Tablet'}</span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <span>FEFO Batch: <strong style={{ color: 'var(--primary)', fontFamily: 'monospace' }}>{item.batch_number || 'BATCH-001'}</strong></span>
+                          <span>• Expiry Date: <strong style={{ color: isCritical ? 'var(--danger)' : 'var(--warning)' }}>{item.exp_date || 'N/A'}</strong></span>
+                          <span>• Current Stock: <strong style={{ color: 'var(--teal-accent)' }}>{item.current_quantity} {item.unit || 'pcs'}</strong></span>
+                          <span>• Storage: <strong>{item.storage_location || 'Main Shelf'}</strong></span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '700' }}>EXPIRY RISK SCORE</div>
+                          <div style={{ fontSize: '1.4rem', fontWeight: '800', color: borderColor }}>
+                            {riskScore.toFixed(1)}%
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteAiRiskInsight(item.id)}
+                          className="btn btn-secondary" 
+                          style={{ padding: '6px 8px', color: 'var(--danger)' }}
+                          title="Delete AI Insight Record"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Risk Progress Bar */}
+                    <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.min(100, Math.max(5, riskScore))}%`,
+                        height: '100%',
+                        background: isCritical ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : (isModerate ? 'var(--warning)' : 'var(--success)'),
+                        borderRadius: '4px',
+                        transition: 'width 0.5s ease'
+                      }}></div>
+                    </div>
+
+                    {/* Metrics Forecast Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: 'rgba(0,0,0,0.15)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.82rem' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Predicted 30-Day Demand:</span>
+                        <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--teal-accent)' }}>{item.predicted_demand_30d} {item.unit || 'units'}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Recommended Reorder Qty:</span>
+                        <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--primary)' }}>{item.recommended_reorder_qty} {item.unit || 'units'}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Groq AI Confidence:</span>
+                        <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--success)' }}>{item.confidence_score}%</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Supplier Contact:</span>
+                        <div style={{ fontWeight: '700' }}>{item.supplier_name || 'Central Hospital Supply'}</div>
+                      </div>
+                    </div>
+
+                    {/* AI Recommendation Box */}
+                    <div style={{ background: 'rgba(99, 102, 241, 0.1)', borderLeft: '4px solid var(--primary)', padding: '14px', borderRadius: '8px', fontSize: '0.88rem', lineHeight: '1.5' }}>
+                      <strong style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <Sparkles size={16} />
+                        <span>Groq AI Clinical Inventory Action Plan:</span>
+                      </strong>
+                      <p style={{ margin: 0, color: 'var(--text-main)' }}>{item.ai_recommendation}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
 
-        {/* FEFO Batches Tab */}
+
+        {/* TAB: FEFO STOCK BATCHES & INVENTORY TRANSACTIONS */}
         {activeTab === 'batches' && (
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px' }}>FEFO Multi-Batch Inventory</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                  <th style={{ padding: '12px' }}>MEDICINE</th>
-                  <th style={{ padding: '12px' }}>BATCH NO.</th>
-                  <th style={{ padding: '12px' }}>EXPIRY DATE</th>
-                  <th style={{ padding: '12px' }}>QTY AVAILABLE</th>
-                  <th style={{ padding: '12px' }}>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batches.map(b => (
-                  <tr key={b.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '12px', fontWeight: '700' }}>{b.brand_name} ({b.generic_name})</td>
-                    <td style={{ padding: '12px', fontFamily: 'monospace' }}>{b.batch_number}</td>
-                    <td style={{ padding: '12px', color: 'var(--warning)', fontWeight: '700' }}>{b.exp_date}</td>
-                    <td style={{ padding: '12px', fontWeight: '700', color: 'var(--primary)' }}>{b.current_quantity} {b.unit}</td>
-                    <td style={{ padding: '12px' }}><span className="badge badge-success">{b.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL FEFO BATCHES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{batchesList.length} Active Batches</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL STOCK UNITS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{totalStockUnits} Units</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>AVAILABLE BATCHES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{availableBatchesCount} Available</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>EXPIRED / LOW STOCK</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{expiredBatchesCount + lowBatchesCount} Risk Batches</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                <button
+                  onClick={() => setBatchSubTab('inventory')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: batchSubTab === 'inventory' ? 'var(--primary)' : 'transparent',
+                    color: batchSubTab === 'inventory' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Package size={16} />
+                  <span>Multi-Batch FEFO Inventory ({batchesList.length})</span>
+                </button>
+                <button
+                  onClick={() => setBatchSubTab('transactions')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: batchSubTab === 'transactions' ? 'var(--primary)' : 'transparent',
+                    color: batchSubTab === 'transactions' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <RefreshCw size={16} />
+                  <span>Stock Movements Audit Log ({transactionsList.length})</span>
+                </button>
+              </div>
+
+              {batchSubTab === 'inventory' ? (
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => setShowRecordTransactionModal(true)} className="btn btn-secondary" style={{ color: 'var(--teal-accent)', borderColor: 'var(--teal-accent)' }}>
+                    <RefreshCw size={16} />
+                    <span>Record Stock Movement</span>
+                  </button>
+                  <button onClick={() => setShowCreateBatchModal(true)} className="btn btn-primary">
+                    <Plus size={18} />
+                    <span>Intake New Stock Batch</span>
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setShowRecordTransactionModal(true)} className="btn btn-primary">
+                  <RefreshCw size={18} />
+                  <span>Log New Stock Transaction</span>
+                </button>
+              )}
+            </div>
+
+            {batchSubTab === 'inventory' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Search batch by batch number, medicine name, storage rack, or supplier..." 
+                      value={batchSearch}
+                      onChange={e => setBatchSearch(e.target.value)}
+                      style={{ paddingLeft: '42px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                    {[
+                      { id: 'all', label: 'All Batches' },
+                      { id: 'available', label: 'Available' },
+                      { id: 'low', label: 'Low Stock' },
+                      { id: 'expired', label: 'Expired' },
+                      { id: 'recalled', label: 'Recalled' },
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setBatchStatusFilter(f.id)}
+                        className="btn"
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '0.78rem',
+                          background: batchStatusFilter === f.id ? 'var(--primary)' : 'transparent',
+                          color: batchStatusFilter === f.id ? '#fff' : 'var(--text-muted)',
+                          border: 'none',
+                          borderRadius: '6px'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px' }}>FEFO BATCH NO</th>
+                        <th style={{ padding: '14px' }}>FORMULARY MEDICINE</th>
+                        <th style={{ padding: '14px' }}>EXPIRY DATE (FEFO)</th>
+                        <th style={{ padding: '14px' }}>STOCK QTY (CURR / INIT)</th>
+                        <th style={{ padding: '14px' }}>UNIT COST</th>
+                        <th style={{ padding: '14px' }}>STORAGE LOCATION</th>
+                        <th style={{ padding: '14px' }}>SUPPLIER</th>
+                        <th style={{ padding: '14px' }}>STATUS</th>
+                        <th style={{ padding: '14px' }}>ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBatches.map(b => {
+                        const isExpired = b.status === 'expired' || b.exp_date < new Date().toISOString().slice(0, 10);
+                        const isLow = b.status === 'low' || (b.current_quantity > 0 && b.current_quantity < 50);
+
+                        return (
+                          <tr key={b.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '800', color: 'var(--primary)', fontFamily: 'monospace' }}>{b.batch_number}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>MFD: {b.mfd_date}</div>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '700' }}>{b.brand_name}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{b.generic_name} ({b.dosage_form || 'Tablet'})</div>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '800', color: isExpired ? 'var(--danger)' : 'var(--warning)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Clock size={14} />
+                                <span>{b.exp_date}</span>
+                              </div>
+                              {isExpired && <span style={{ fontSize: '0.68rem', color: 'var(--danger)', fontWeight: '700' }}>EXPIRED</span>}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '800', fontSize: '1rem', color: isLow ? 'var(--warning)' : (isExpired ? 'var(--danger)' : 'var(--success)') }}>
+                                {b.current_quantity} {b.unit || 'pcs'}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Initial: {b.initial_quantity}</div>
+                            </td>
+                            <td style={{ padding: '14px', fontWeight: '700', color: 'var(--primary)' }}>
+                              LKR {parseFloat(b.unit_cost || 0).toFixed(2)}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--teal-accent)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                                {b.storage_location || 'Main Shelf'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                              {b.supplier_name || 'Central Pharmacy Stock'}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span className={`badge ${
+                                isExpired ? 'badge-danger' : (isLow ? 'badge-warning' : 'badge-success')
+                              }`}>
+                                {b.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button 
+                                  onClick={() => { setTransactionForm({ ...transactionForm, batch_id: b.id }); setShowRecordTransactionModal(true); }}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
+                                  title="Record Stock Intake or Dispense"
+                                >
+                                  <RefreshCw size={13} />
+                                  <span>Move</span>
+                                </button>
+                                <button 
+                                  onClick={() => { setSelectedBatch(b); setShowEditBatchModal(true); }}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button 
+                                  onClick={() => { setSelectedBatch(b); setShowDeleteBatchModal(true); }}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {batchSubTab === 'transactions' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Search transactions by reference no, batch no, medicine, user, or notes..." 
+                      value={transactionSearch}
+                      onChange={e => setTransactionSearch(e.target.value)}
+                      style={{ paddingLeft: '42px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                    {[
+                      { id: 'all', label: 'All Movements' },
+                      { id: 'RESTOCK', label: 'Restock' },
+                      { id: 'DISPENSE', label: 'Dispense' },
+                      { id: 'ADJUSTMENT', label: 'Adjustment' },
+                      { id: 'RETURN', label: 'Return' },
+                      { id: 'EXPIRED_DISCARD', label: 'Discarded' },
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setTransactionTypeFilter(f.id)}
+                        className="btn"
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '0.78rem',
+                          background: transactionTypeFilter === f.id ? 'var(--primary)' : 'transparent',
+                          color: transactionTypeFilter === f.id ? '#fff' : 'var(--text-muted)',
+                          border: 'none',
+                          borderRadius: '6px'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px' }}>REFERENCE NO / TIME</th>
+                        <th style={{ padding: '14px' }}>FORMULARY MEDICINE</th>
+                        <th style={{ padding: '14px' }}>BATCH NUMBER</th>
+                        <th style={{ padding: '14px' }}>MOVEMENT TYPE</th>
+                        <th style={{ padding: '14px' }}>QUANTITY MOVED</th>
+                        <th style={{ padding: '14px' }}>PERFORMED BY STAFF</th>
+                        <th style={{ padding: '14px' }}>MOVEMENT NOTES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.map(t => (
+                        <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ fontWeight: '800', color: 'var(--primary)', fontFamily: 'monospace' }}>{t.reference_no}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              {new Date(t.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ fontWeight: '700' }}>{t.brand_name}</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t.generic_name}</div>
+                          </td>
+                          <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--teal-accent)' }}>
+                            {t.batch_number}
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <span style={{ 
+                              padding: '4px 10px', borderRadius: '6px', fontWeight: '800', fontSize: '0.78rem',
+                              background: t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? 'rgba(16, 185, 129, 0.2)' : (t.transaction_type === 'DISPENSE' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
+                              color: t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? 'var(--success)' : (t.transaction_type === 'DISPENSE' ? 'var(--primary)' : 'var(--danger)')
+                            }}>
+                              {t.transaction_type}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: '800', fontSize: '1rem', color: t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? 'var(--success)' : 'var(--danger)' }}>
+                            {t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? `+${t.quantity}` : `-${t.quantity}`} {t.unit || 'units'}
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ fontWeight: '600' }}>{t.user_name || 'System Admin'}</div>
+                          </td>
+                          <td style={{ padding: '14px', color: 'var(--text-muted)', fontSize: '0.82rem', maxWidth: '240px' }}>
+                            {t.notes || 'Routine stock update.'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* AI Triage Tab */}
-        {activeTab === 'ai_triage' && (
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px' }}>AI Clinical Symptom Triage</h3>
-            <form onSubmit={handleRunAiTriage} style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '24px' }}>
-              <textarea className="input-field" rows={3} placeholder="Enter clinical symptoms..." value={symptomInput} onChange={e => setSymptomInput(e.target.value)} />
-              <button type="submit" className="btn btn-primary" disabled={isTriaging}>Run AI Triage</button>
-            </form>
-          </div>
-        )}
 
         {/* Database Architecture Tab */}
         {activeTab === 'schema' && (
@@ -1621,6 +3389,585 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
       </main>
+
+      {/* CREATE PRESCRIPTION MODAL */}
+      {showCreatePrescriptionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreatePrescriptionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Issue New Clinical Prescription (Rx)</h3>
+            <form onSubmit={handleCreatePrescription} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Patient (EHR)</label>
+                  <select className="input-field" value={prescriptionForm.patient_id} onChange={e => setPrescriptionForm({...prescriptionForm, patient_id: parseInt(e.target.value)})}>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescribing Doctor</label>
+                  <select className="input-field" value={prescriptionForm.doctor_id} onChange={e => setPrescriptionForm({...prescriptionForm, doctor_id: parseInt(e.target.value)})}>
+                    {staffList.map(st => (
+                      <option key={st.id} value={st.id}>{st.employee_code} - Dr. {st.first_name} {st.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Link Clinical Appointment (Optional)</label>
+                  <select className="input-field" value={prescriptionForm.appointment_id || ''} onChange={e => setPrescriptionForm({...prescriptionForm, appointment_id: e.target.value ? parseInt(e.target.value) : ''})}>
+                    <option value="">Direct Prescription (Unlinked)</option>
+                    {appointments.map(a => (
+                      <option key={a.id} value={a.id}>Appt #{a.id} - {a.patient_name} ({new Date(a.appointment_date).toLocaleDateString()})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescription Status</label>
+                  <select className="input-field" value={prescriptionForm.status} onChange={e => setPrescriptionForm({...prescriptionForm, status: e.target.value})}>
+                    <option value="ISSUED">ISSUED - Ready for Dispensing</option>
+                    <option value="DRAFT">DRAFT - Pending Doctor Approval</option>
+                    <option value="DISPENSED">DISPENSED - Pharmacy Fulfilled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Instructions & Notes</label>
+                <textarea className="input-field" rows={2} value={prescriptionForm.clinical_notes} onChange={e => setPrescriptionForm({...prescriptionForm, clinical_notes: e.target.value})} placeholder="Special clinical instructions, dietary cautions, follow-up advice..." />
+              </div>
+
+              {/* Dynamic Prescription Items Builder */}
+              <div style={{ marginTop: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--primary)' }}>Prescribed Medicines List ({prescriptionForm.items.length})</label>
+                  <button type="button" onClick={handleAddPrescriptionItem} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
+                    <Plus size={14} />
+                    <span>Add Item</span>
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {prescriptionForm.items.map((item, idx) => (
+                    <div key={idx} className="glass-panel" style={{ padding: '12px', background: 'rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 30px', gap: '8px', alignItems: 'center' }}>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Medicine</label>
+                          <select className="input-field" value={item.medicine_id} onChange={e => handleUpdatePrescriptionItem(idx, 'medicine_id', parseInt(e.target.value))}>
+                            {medicinesList.map(m => (
+                              <option key={m.id} value={m.id}>{m.brand_name} ({m.generic_name}) - {m.dosage_form}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Dosage</label>
+                          <input type="text" className="input-field" value={item.dosage} onChange={e => handleUpdatePrescriptionItem(idx, 'dosage', e.target.value)} placeholder="500mg" />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Qty Prescribed</label>
+                          <input type="number" className="input-field" value={item.quantity_prescribed} onChange={e => handleUpdatePrescriptionItem(idx, 'quantity_prescribed', parseInt(e.target.value))} />
+                        </div>
+                        {prescriptionForm.items.length > 1 && (
+                          <button type="button" onClick={() => handleRemovePrescriptionItem(idx)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', marginTop: '14px' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Frequency</label>
+                          <input type="text" className="input-field" value={item.frequency} onChange={e => handleUpdatePrescriptionItem(idx, 'frequency', e.target.value)} placeholder="BD - Twice daily" />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Duration (Days)</label>
+                          <input type="number" className="input-field" value={item.duration_days} onChange={e => handleUpdatePrescriptionItem(idx, 'duration_days', parseInt(e.target.value))} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Patient Instructions</label>
+                          <input type="text" className="input-field" value={item.instructions} onChange={e => handleUpdatePrescriptionItem(idx, 'instructions', e.target.value)} placeholder="Take with food" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '14px' }}>
+                <button type="button" onClick={() => setShowCreatePrescriptionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Issue Rx Prescription</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW & PRINT PRESCRIPTION SLIP MODAL */}
+      {showViewPrescriptionModal && selectedPrescription && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '600px', padding: '32px', position: 'relative', background: '#fff', color: '#1e293b' }}>
+            <button onClick={() => setShowViewPrescriptionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            {/* Clinical Slip Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '14px', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>MediSync Enterprise Healthcare</h2>
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Central Hospital • Clinical Pharmacy Services</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#4f46e5', fontFamily: 'monospace' }}>{selectedPrescription.prescription_code}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Issued: {selectedPrescription.issued_at ? new Date(selectedPrescription.issued_at).toLocaleDateString() : 'Draft'}</div>
+              </div>
+            </div>
+
+            {/* Patient & Doctor Info Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem' }}>
+              <div>
+                <strong style={{ color: '#0f172a' }}>PATIENT DETAILS:</strong>
+                <div>{selectedPrescription.patient_name} ({selectedPrescription.patient_code})</div>
+                <div>Blood Group: <strong>{selectedPrescription.blood_group || 'O+'}</strong> • Phone: {selectedPrescription.patient_phone || 'N/A'}</div>
+                {selectedPrescription.allergies && selectedPrescription.allergies.toLowerCase() !== 'none' && (
+                  <div style={{ color: '#dc2626', fontWeight: '700', marginTop: '4px' }}>⚠️ Allergy Alert: {selectedPrescription.allergies}</div>
+                )}
+              </div>
+              <div>
+                <strong style={{ color: '#0f172a' }}>PRESCRIBING CLINICIAN:</strong>
+                <div>Dr. {selectedPrescription.doctor_name}</div>
+                <div>{selectedPrescription.specialization || 'Cardiology Specialist'}</div>
+                <div style={{ color: '#64748b', fontSize: '0.78rem' }}>Ward: {selectedPrescription.department_name || 'General OPD'}</div>
+              </div>
+            </div>
+
+            {/* Prescribed Items Table */}
+            <h4 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>Rx Prescribed Medication Protocol:</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem', marginBottom: '16px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #cbd5e1', background: '#f1f5f9', color: '#475569' }}>
+                  <th style={{ padding: '8px' }}>MEDICINE & FORMULA</th>
+                  <th style={{ padding: '8px' }}>DOSAGE</th>
+                  <th style={{ padding: '8px' }}>FREQUENCY</th>
+                  <th style={{ padding: '8px' }}>DURATION</th>
+                  <th style={{ padding: '8px' }}>QTY</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedPrescription.items && selectedPrescription.items.map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '8px', fontWeight: '700' }}>{item.brand_name} ({item.generic_name})</td>
+                    <td style={{ padding: '8px' }}>{item.dosage}</td>
+                    <td style={{ padding: '8px' }}>{item.frequency}</td>
+                    <td style={{ padding: '8px' }}>{item.duration_days} days</td>
+                    <td style={{ padding: '8px', fontWeight: '700' }}>{item.quantity_prescribed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {selectedPrescription.clinical_notes && (
+              <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '16px', color: '#334155' }}>
+                <strong>Clinical Notes:</strong> {selectedPrescription.clinical_notes}
+              </div>
+            )}
+
+            {/* Footer Signature & Status */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: selectedPrescription.status === 'DISPENSED' ? '#16a34a' : '#4f46e5' }}>
+                STATUS: {selectedPrescription.status}
+              </span>
+              <button onClick={() => window.print()} className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '0.82rem' }}>
+                <Printer size={14} />
+                <span>Print Rx Slip</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PRESCRIPTION MODAL */}
+      {showEditPrescriptionModal && selectedPrescription && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditPrescriptionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Prescription {selectedPrescription.prescription_code}</h3>
+            <form onSubmit={handleUpdatePrescription} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescription Status</label>
+                <select className="input-field" value={selectedPrescription.status} onChange={e => setSelectedPrescription({...selectedPrescription, status: e.target.value})}>
+                  <option value="ISSUED">ISSUED - Ready for Dispensing</option>
+                  <option value="DISPENSED">DISPENSED - Pharmacy Fulfilled</option>
+                  <option value="DRAFT">DRAFT - Pending Doctor Review</option>
+                  <option value="CANCELLED">CANCELLED - Revoked</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Instructions & Notes</label>
+                <textarea className="input-field" rows={3} value={selectedPrescription.clinical_notes || ''} onChange={e => setSelectedPrescription({...selectedPrescription, clinical_notes: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditPrescriptionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Prescription</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE PRESCRIPTION MODAL */}
+      {showDeletePrescriptionModal && selectedPrescription && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Prescription Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete prescription <strong>{selectedPrescription.prescription_code}</strong> for patient <strong>{selectedPrescription.patient_name}</strong>?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeletePrescriptionModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeletePrescription} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Prescription</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE APPOINTMENT MODAL */}
+      {showCreateAppointmentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateAppointmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Book New Clinical Appointment</h3>
+            <form onSubmit={handleCreateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Patient (EHR)</label>
+                <select className="input-field" value={appointmentForm.patient_id} onChange={e => setAppointmentForm({...appointmentForm, patient_id: parseInt(e.target.value)})}>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name} ({p.blood_group || 'O+'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Attending Doctor / Clinician</label>
+                <select className="input-field" value={appointmentForm.doctor_id} onChange={e => setAppointmentForm({...appointmentForm, doctor_id: parseInt(e.target.value)})}>
+                  {staffList.map(st => (
+                    <option key={st.id} value={st.id}>{st.employee_code} - Dr. {st.first_name} {st.last_name} ({st.specialization || 'General Care'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Appointment Date & Time</label>
+                <input type="datetime-local" className="input-field" required value={appointmentForm.appointment_date} onChange={e => setAppointmentForm({...appointmentForm, appointment_date: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Type</label>
+                  <select className="input-field" value={appointmentForm.type} onChange={e => setAppointmentForm({...appointmentForm, type: e.target.value})}>
+                    <option value="Consultation">Consultation</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Routine Checkup">Routine Checkup</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Priority Level</label>
+                  <select className="input-field" value={appointmentForm.priority} onChange={e => setAppointmentForm({...appointmentForm, priority: e.target.value})}>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High Priority</option>
+                    <option value="Emergency">Emergency</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <select className="input-field" value={appointmentForm.status} onChange={e => setAppointmentForm({...appointmentForm, status: e.target.value})}>
+                    <option value="Scheduled">Scheduled</option>
+                    <option value="In_Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Reason / Notes</label>
+                <textarea className="input-field" rows={3} value={appointmentForm.reason} onChange={e => setAppointmentForm({...appointmentForm, reason: e.target.value})} placeholder="Reason for consultation or follow-up symptoms..." />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateAppointmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Book Appointment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT APPOINTMENT MODAL */}
+      {showEditAppointmentModal && selectedAppointment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditAppointmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Clinical Appointment #{selectedAppointment.id}</h3>
+            <form onSubmit={handleUpdateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Patient (EHR)</label>
+                <select className="input-field" value={selectedAppointment.patient_id} onChange={e => setSelectedAppointment({...selectedAppointment, patient_id: parseInt(e.target.value)})}>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Attending Doctor / Clinician</label>
+                <select className="input-field" value={selectedAppointment.doctor_id} onChange={e => setSelectedAppointment({...selectedAppointment, doctor_id: parseInt(e.target.value)})}>
+                  {staffList.map(st => (
+                    <option key={st.id} value={st.id}>{st.employee_code} - Dr. {st.first_name} {st.last_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Appointment Date & Time</label>
+                <input type="datetime-local" className="input-field" required value={selectedAppointment.appointment_date ? selectedAppointment.appointment_date.replace(' ', 'T').slice(0, 16) : ''} onChange={e => setSelectedAppointment({...selectedAppointment, appointment_date: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Type</label>
+                  <select className="input-field" value={selectedAppointment.type} onChange={e => setSelectedAppointment({...selectedAppointment, type: e.target.value})}>
+                    <option value="Consultation">Consultation</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Routine Checkup">Routine Checkup</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Priority Level</label>
+                  <select className="input-field" value={selectedAppointment.priority} onChange={e => setSelectedAppointment({...selectedAppointment, priority: e.target.value})}>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High Priority</option>
+                    <option value="Emergency">Emergency</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <select className="input-field" value={selectedAppointment.status} onChange={e => setSelectedAppointment({...selectedAppointment, status: e.target.value})}>
+                    <option value="Scheduled">Scheduled</option>
+                    <option value="In_Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Reason / Notes</label>
+                <textarea className="input-field" rows={3} value={selectedAppointment.reason || ''} onChange={e => setSelectedAppointment({...selectedAppointment, reason: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditAppointmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Appointment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE APPOINTMENT MODAL */}
+      {showDeleteAppointmentModal && selectedAppointment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Appointment Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete clinical appointment <strong>#{selectedAppointment.id}</strong> for patient <strong>{selectedAppointment.patient_name}</strong>?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteAppointmentModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteAppointment} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Appointment</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CLINICIAN TRIAGE OVERRIDE MODAL */}
+      {showOverrideModal && selectedTriageLog && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowOverrideModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '12px' }}>Clinician Triage Override #{selectedTriageLog.id}</h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '16px' }}>
+              Presented Symptoms: <em>"{selectedTriageLog.input_symptoms}"</em>
+            </p>
+
+            <form onSubmit={handleDoctorOverride} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Override Triage Priority Level</label>
+                <select className="input-field" value={selectedTriageLog.suggested_triage_level} onChange={e => setSelectedTriageLog({...selectedTriageLog, suggested_triage_level: e.target.value})}>
+                  <option value="Routine">Routine - OPD Walk-in</option>
+                  <option value="Urgent">Urgent - Priority OPD Consultation</option>
+                  <option value="Emergency">Emergency - Immediate Resuscitation & ICU</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Override Destination Ward</label>
+                <select className="input-field" value={selectedTriageLog.recommended_department} onChange={e => setSelectedTriageLog({...selectedTriageLog, recommended_department: e.target.value})}>
+                  <option value="Cardiology & ICU">Cardiology & ICU</option>
+                  <option value="Neurology & Stroke Unit">Neurology & Stroke Unit</option>
+                  <option value="Pulmonology Ward">Pulmonology Ward</option>
+                  <option value="General OPD">General OPD</option>
+                  <option value="Pediatrics Ward">Pediatrics Ward</option>
+                  <option value="Orthopedics">Orthopedics</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowOverrideModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Apply Clinician Override</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE DEPARTMENT MODAL */}
+      {showCreateDepartmentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateDepartmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Add Hospital Department / Ward</h3>
+            <form onSubmit={handleCreateDepartment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Name</label>
+                <input type="text" className="input-field" required value={departmentForm.name} onChange={e => setDepartmentForm({...departmentForm, name: e.target.value})} placeholder="e.g. Pediatrics Unit, Surgical ICU" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Code</label>
+                  <input type="text" className="input-field" value={departmentForm.code} onChange={e => setDepartmentForm({...departmentForm, code: e.target.value})} placeholder="DEPT-PED-01" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Floor Location & Wing</label>
+                  <input type="text" className="input-field" value={departmentForm.location_floor} onChange={e => setDepartmentForm({...departmentForm, location_floor: e.target.value})} placeholder="3rd Floor - Wing C" />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Description</label>
+                <textarea className="input-field" rows={3} value={departmentForm.description} onChange={e => setDepartmentForm({...departmentForm, description: e.target.value})} placeholder="Specialized pediatric inpatient care and clinical monitoring..." />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Ward Operational Status</label>
+                <select className="input-field" value={departmentForm.status} onChange={e => setDepartmentForm({...departmentForm, status: e.target.value})}>
+                  <option value="active">Active & Operational</option>
+                  <option value="inactive">Inactive / Under Renovation</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateDepartmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Department</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT DEPARTMENT MODAL */}
+      {showEditDepartmentModal && selectedDepartment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditDepartmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Department #{selectedDepartment.id}</h3>
+            <form onSubmit={handleUpdateDepartment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Name</label>
+                <input type="text" className="input-field" required value={selectedDepartment.name} onChange={e => setSelectedDepartment({...selectedDepartment, name: e.target.value})} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Code</label>
+                  <input type="text" className="input-field" value={selectedDepartment.code || ''} onChange={e => setSelectedDepartment({...selectedDepartment, code: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Floor Location & Wing</label>
+                  <input type="text" className="input-field" value={selectedDepartment.location_floor || ''} onChange={e => setSelectedDepartment({...selectedDepartment, location_floor: e.target.value})} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Description</label>
+                <textarea className="input-field" rows={3} value={selectedDepartment.description || ''} onChange={e => setSelectedDepartment({...selectedDepartment, description: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Ward Operational Status</label>
+                <select className="input-field" value={selectedDepartment.status || 'active'} onChange={e => setSelectedDepartment({...selectedDepartment, status: e.target.value})}>
+                  <option value="active">Active & Operational</option>
+                  <option value="inactive">Inactive / Under Renovation</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditDepartmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Department</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE DEPARTMENT MODAL */}
+      {showDeleteDepartmentModal && selectedDepartment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Department Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete department <strong>{selectedDepartment.name}</strong> ({selectedDepartment.code}) from the system?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteDepartmentModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteDepartment} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Department</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CREATE MEDICINE MODAL */}
       {showCreateMedicineModal && (
@@ -2462,18 +4809,195 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         </div>
       )}
 
-      {/* DELETE SUPPLIER MODAL */}
-      {showDeleteSupplierModal && selectedSupplier && (
+      {/* CREATE STOCK BATCH MODAL */}
+      {showCreateBatchModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateBatchModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Intake New FEFO Medicine Stock Batch</h3>
+            <form onSubmit={handleCreateBatch} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Formulary Medicine</label>
+                  <select className="input-field" value={batchForm.medicine_id} onChange={e => setBatchForm({...batchForm, medicine_id: parseInt(e.target.value)})}>
+                    {medicinesList.map(m => (
+                      <option key={m.id} value={m.id}>{m.brand_name} ({m.generic_name})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Supplier</label>
+                  <select className="input-field" value={batchForm.supplier_id || ''} onChange={e => setBatchForm({...batchForm, supplier_id: e.target.value ? parseInt(e.target.value) : ''})}>
+                    <option value="">Central Pharmacy Intake (No Supplier)</option>
+                    {suppliersList.map(s => (
+                      <option key={s.id} value={s.id}>{s.supplier_code} - {s.company_name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Batch Number</label>
+                  <input type="text" className="input-field" required value={batchForm.batch_number} onChange={e => setBatchForm({...batchForm, batch_number: e.target.value})} placeholder="AMX-2026-N1" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Storage Rack / Location</label>
+                  <input type="text" className="input-field" value={batchForm.storage_location} onChange={e => setBatchForm({...batchForm, storage_location: e.target.value})} placeholder="Rack B-14, Cold Shelf C-02" />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Manufacture Date (MFD)</label>
+                  <input type="date" className="input-field" required value={batchForm.mfd_date} onChange={e => setBatchForm({...batchForm, mfd_date: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--danger)', fontWeight: '700', display: 'block', marginBottom: '4px' }}>Expiry Date (FEFO)</label>
+                  <input type="date" className="input-field" required value={batchForm.exp_date} onChange={e => setBatchForm({...batchForm, exp_date: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Initial Stock Qty</label>
+                  <input type="number" className="input-field" required value={batchForm.initial_quantity} onChange={e => setBatchForm({...batchForm, initial_quantity: parseInt(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Unit Cost (LKR)</label>
+                  <input type="number" step="0.01" className="input-field" value={batchForm.unit_cost} onChange={e => setBatchForm({...batchForm, unit_cost: parseFloat(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <select className="input-field" value={batchForm.status} onChange={e => setBatchForm({...batchForm, status: e.target.value})}>
+                    <option value="available">Available</option>
+                    <option value="low">Low Stock</option>
+                    <option value="expired">Expired</option>
+                    <option value="recalled">Recalled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateBatchModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Intake Stock Batch</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD INVENTORY STOCK MOVEMENT MODAL */}
+      {showRecordTransactionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowRecordTransactionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Record Inventory Stock Movement</h3>
+            <form onSubmit={handleRecordTransaction} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Target FEFO Batch</label>
+                <select className="input-field" value={transactionForm.batch_id} onChange={e => setTransactionForm({...transactionForm, batch_id: parseInt(e.target.value)})}>
+                  {batchesList.map(b => (
+                    <option key={b.id} value={b.id}>{b.batch_number} - {b.brand_name} (Curr Stock: {b.current_quantity} {b.unit || 'pcs'} • Exp: {b.exp_date})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Movement Type</label>
+                  <select className="input-field" value={transactionForm.transaction_type} onChange={e => setTransactionForm({...transactionForm, transaction_type: e.target.value})}>
+                    <option value="RESTOCK">RESTOCK (+ Stock Intake)</option>
+                    <option value="DISPENSE">DISPENSE (- Clinical Dispense)</option>
+                    <option value="ADJUSTMENT">ADJUSTMENT (= Audit Set Stock)</option>
+                    <option value="RETURN">RETURN (+ Returned to Inventory)</option>
+                    <option value="EXPIRED_DISCARD">EXPIRED_DISCARD (- Damaged/Expired)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Quantity to Move</label>
+                  <input type="number" min="1" className="input-field" required value={transactionForm.quantity} onChange={e => setTransactionForm({...transactionForm, quantity: parseInt(e.target.value) || 0})} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Movement Audit Notes</label>
+                <textarea className="input-field" rows={3} value={transactionForm.notes} onChange={e => setTransactionForm({...transactionForm, notes: e.target.value})} placeholder="Reason for inventory movement, invoice ref, or ward order..." />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowRecordTransactionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Log Transaction & Update Stock</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT STOCK BATCH MODAL */}
+      {showEditBatchModal && selectedBatch && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditBatchModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Stock Batch {selectedBatch.batch_number}</h3>
+            <form onSubmit={handleUpdateBatch} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Current Stock Qty</label>
+                  <input type="number" className="input-field" value={selectedBatch.current_quantity} onChange={e => setSelectedBatch({...selectedBatch, current_quantity: parseInt(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Batch Status</label>
+                  <select className="input-field" value={selectedBatch.status} onChange={e => setSelectedBatch({...selectedBatch, status: e.target.value})}>
+                    <option value="available">Available</option>
+                    <option value="low">Low Stock</option>
+                    <option value="expired">Expired</option>
+                    <option value="recalled">Recalled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Expiry Date (FEFO)</label>
+                  <input type="date" className="input-field" value={selectedBatch.exp_date} onChange={e => setSelectedBatch({...selectedBatch, exp_date: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Storage Location</label>
+                  <input type="text" className="input-field" value={selectedBatch.storage_location || ''} onChange={e => setSelectedBatch({...selectedBatch, storage_location: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditBatchModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Batch</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE STOCK BATCH MODAL */}
+      {showDeleteBatchModal && selectedBatch && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
             <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Supplier Deletion</h3>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Batch Deletion</h3>
             <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-              Are you sure you want to delete pharmaceutical supplier <strong>{selectedSupplier.company_name}</strong> ({selectedSupplier.supplier_code}) from the system?
+              Are you sure you want to delete stock batch <strong>{selectedBatch.batch_number}</strong> for <strong>{selectedBatch.brand_name}</strong>?
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button onClick={() => setShowDeleteSupplierModal(false)} className="btn btn-secondary">Cancel</button>
-              <button onClick={handleDeleteSupplier} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Supplier</button>
+              <button onClick={() => setShowDeleteBatchModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteBatch} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Stock Batch</button>
             </div>
           </div>
         </div>
@@ -2481,3 +5005,4 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     </div>
   );
 }
+

@@ -1441,3 +1441,478 @@ Route::delete('/v1/appointments/{id}', function ($id) {
     return response()->json(['success' => true, 'message' => 'Appointment record deleted successfully.']);
 });
 
+// Clinical Prescriptions & Prescription Items CRUD Engine
+Route::get('/v1/prescriptions', function () {
+    $prescriptions = DB::table('prescriptions')
+        ->join('patients', 'prescriptions.patient_id', '=', 'patients.id')
+        ->join('staff', 'prescriptions.doctor_id', '=', 'staff.id')
+        ->leftJoin('appointments', 'prescriptions.appointment_id', '=', 'appointments.id')
+        ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
+        ->select(
+            'prescriptions.*',
+            'patients.patient_code',
+            'patients.first_name as patient_first_name',
+            'patients.last_name as patient_last_name',
+            'patients.blood_group',
+            'patients.allergies',
+            'patients.phone as patient_phone',
+            'staff.employee_code',
+            'staff.first_name as doctor_first_name',
+            'staff.last_name as doctor_last_name',
+            'staff.specialization',
+            'departments.name as department_name',
+            'appointments.appointment_date',
+            'appointments.type as appointment_type',
+            DB::raw("CONCAT(patients.first_name, ' ', patients.last_name) as patient_name"),
+            DB::raw("CONCAT(staff.first_name, ' ', staff.last_name) as doctor_name")
+        )
+        ->orderBy('prescriptions.id', 'desc')
+        ->get();
+
+    foreach ($prescriptions as $rx) {
+        $items = DB::table('prescription_items')
+            ->join('medicines', 'prescription_items.medicine_id', '=', 'medicines.id')
+            ->select(
+                'prescription_items.*',
+                'medicines.brand_name',
+                'medicines.generic_name',
+                'medicines.dosage_form',
+                'medicines.unit',
+                'medicines.unit_price'
+            )
+            ->where('prescription_items.prescription_id', $rx->id)
+            ->get();
+        $rx->items = $items;
+    }
+
+    return response()->json($prescriptions);
+});
+
+Route::get('/v1/prescriptions/{id}', function ($id) {
+    $rx = DB::table('prescriptions')
+        ->join('patients', 'prescriptions.patient_id', '=', 'patients.id')
+        ->join('staff', 'prescriptions.doctor_id', '=', 'staff.id')
+        ->leftJoin('appointments', 'prescriptions.appointment_id', '=', 'appointments.id')
+        ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
+        ->select(
+            'prescriptions.*',
+            'patients.patient_code',
+            'patients.first_name as patient_first_name',
+            'patients.last_name as patient_last_name',
+            'patients.blood_group',
+            'patients.allergies',
+            'patients.phone as patient_phone',
+            'staff.employee_code',
+            'staff.first_name as doctor_first_name',
+            'staff.last_name as doctor_last_name',
+            'staff.specialization',
+            'departments.name as department_name',
+            'appointments.appointment_date',
+            'appointments.type as appointment_type',
+            DB::raw("CONCAT(patients.first_name, ' ', patients.last_name) as patient_name"),
+            DB::raw("CONCAT(staff.first_name, ' ', staff.last_name) as doctor_name")
+        )
+        ->where('prescriptions.id', $id)
+        ->first();
+
+    if (!$rx) {
+        return response()->json(['success' => false, 'message' => 'Prescription not found.'], 404);
+    }
+
+    $rx->items = DB::table('prescription_items')
+        ->join('medicines', 'prescription_items.medicine_id', '=', 'medicines.id')
+        ->select(
+            'prescription_items.*',
+            'medicines.brand_name',
+            'medicines.generic_name',
+            'medicines.dosage_form',
+            'medicines.unit',
+            'medicines.unit_price'
+        )
+        ->where('prescription_items.prescription_id', $id)
+        ->get();
+
+    return response()->json($rx);
+});
+
+Route::post('/v1/prescriptions', function (Request $request) {
+    $patientId = $request->input('patient_id');
+    $doctorId = $request->input('doctor_id');
+    $appointmentId = $request->input('appointment_id');
+    $status = $request->input('status', 'ISSUED');
+    $notes = $request->input('clinical_notes');
+    $itemsInput = $request->input('items', []);
+
+    if (!$patientId || !$doctorId) {
+        return response()->json(['success' => false, 'message' => 'Patient and Attending Doctor are required.'], 422);
+    }
+
+    $rxCode = 'RX-2026-' . rand(1000, 9999);
+
+    $id = DB::table('prescriptions')->insertGetId([
+        'prescription_code' => $rxCode,
+        'patient_id' => (int)$patientId,
+        'doctor_id' => (int)$doctorId,
+        'appointment_id' => $appointmentId ? (int)$appointmentId : null,
+        'status' => $status,
+        'clinical_notes' => $notes,
+        'issued_at' => $status === 'ISSUED' || $status === 'DISPENSED' ? now() : null,
+        'dispensed_at' => $status === 'DISPENSED' ? now() : null,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    if (is_array($itemsInput)) {
+        foreach ($itemsInput as $item) {
+            if (!empty($item['medicine_id'])) {
+                DB::table('prescription_items')->insert([
+                    'prescription_id' => $id,
+                    'medicine_id' => (int)$item['medicine_id'],
+                    'dosage' => $item['dosage'] ?? '500mg',
+                    'frequency' => $item['frequency'] ?? 'Once daily',
+                    'duration_days' => isset($item['duration_days']) ? (int)$item['duration_days'] : 7,
+                    'quantity_prescribed' => isset($item['quantity_prescribed']) ? (int)$item['quantity_prescribed'] : 14,
+                    'quantity_dispensed' => $status === 'DISPENSED' ? (int)($item['quantity_prescribed'] ?? 14) : 0,
+                    'instructions' => $item['instructions'] ?? 'Take after meal',
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+            }
+        }
+    }
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PRESCRIPTION_ISSUED',
+        'entity_type' => 'Prescription',
+        'entity_id' => $id,
+        'payload' => json_encode(['prescription_code' => $rxCode, 'patient_id' => $patientId, 'status' => $status]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Prescription issued successfully.', 'id' => $id, 'prescription_code' => $rxCode], 201);
+});
+
+Route::put('/v1/prescriptions/{id}', function (Request $request, $id) {
+    $rx = DB::table('prescriptions')->where('id', $id)->first();
+    if (!$rx) {
+        return response()->json(['success' => false, 'message' => 'Prescription not found.'], 404);
+    }
+
+    $newStatus = $request->input('status', $rx->status);
+    $dispensedAt = $rx->dispensed_at;
+    if ($newStatus === 'DISPENSED' && !$dispensedAt) {
+        $dispensedAt = now();
+    }
+
+    DB::table('prescriptions')->where('id', $id)->update([
+        'patient_id' => $request->input('patient_id', $rx->patient_id),
+        'doctor_id' => $request->input('doctor_id', $rx->doctor_id),
+        'appointment_id' => $request->input('appointment_id', $rx->appointment_id),
+        'status' => $newStatus,
+        'clinical_notes' => $request->input('clinical_notes', $rx->clinical_notes),
+        'dispensed_at' => $dispensedAt,
+        'updated_at' => now()
+    ]);
+
+    if ($request->has('items') && is_array($request->input('items'))) {
+        DB::table('prescription_items')->where('prescription_id', $id)->delete();
+        foreach ($request->input('items') as $item) {
+            if (!empty($item['medicine_id'])) {
+                DB::table('prescription_items')->insert([
+                    'prescription_id' => $id,
+                    'medicine_id' => (int)$item['medicine_id'],
+                    'dosage' => $item['dosage'] ?? '500mg',
+                    'frequency' => $item['frequency'] ?? 'Once daily',
+                    'duration_days' => isset($item['duration_days']) ? (int)$item['duration_days'] : 7,
+                    'quantity_prescribed' => isset($item['quantity_prescribed']) ? (int)$item['quantity_prescribed'] : 14,
+                    'quantity_dispensed' => $newStatus === 'DISPENSED' ? (int)($item['quantity_prescribed'] ?? 14) : 0,
+                    'instructions' => $item['instructions'] ?? 'Take as directed',
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+            }
+        }
+    }
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PRESCRIPTION_UPDATED',
+        'entity_type' => 'Prescription',
+        'entity_id' => $id,
+        'payload' => json_encode(['status' => $newStatus]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Prescription updated successfully.']);
+});
+
+Route::delete('/v1/prescriptions/{id}', function ($id) {
+    $rx = DB::table('prescriptions')->where('id', $id)->first();
+    if (!$rx) {
+        return response()->json(['success' => false, 'message' => 'Prescription not found.'], 404);
+    }
+
+    DB::table('prescriptions')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PRESCRIPTION_DELETED',
+        'entity_type' => 'Prescription',
+        'entity_id' => $id,
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Prescription deleted successfully.']);
+});
+
+// Medicine Batches & Inventory Transactions CRUD Engine
+Route::get('/v1/batches', function () {
+    $batches = DB::table('medicine_batches')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->leftJoin('suppliers', 'medicine_batches.supplier_id', '=', 'suppliers.id')
+        ->select(
+            'medicine_batches.*',
+            'medicines.brand_name',
+            'medicines.generic_name',
+            'medicines.unit',
+            'medicines.unit_price',
+            'medicines.barcode',
+            'medicines.dosage_form',
+            'suppliers.company_name as supplier_name',
+            'suppliers.supplier_code'
+        )
+        ->orderBy('medicine_batches.exp_date', 'asc')
+        ->get();
+
+    return response()->json($batches);
+});
+
+Route::get('/v1/batches/{id}', function ($id) {
+    $batch = DB::table('medicine_batches')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->leftJoin('suppliers', 'medicine_batches.supplier_id', '=', 'suppliers.id')
+        ->select(
+            'medicine_batches.*',
+            'medicines.brand_name',
+            'medicines.generic_name',
+            'medicines.unit',
+            'medicines.unit_price',
+            'medicines.barcode',
+            'medicines.dosage_form',
+            'suppliers.company_name as supplier_name',
+            'suppliers.supplier_code'
+        )
+        ->where('medicine_batches.id', $id)
+        ->first();
+
+    if (!$batch) {
+        return response()->json(['success' => false, 'message' => 'Medicine batch not found.'], 404);
+    }
+
+    $batch->transactions = DB::table('inventory_transactions')
+        ->leftJoin('users', 'inventory_transactions.user_id', '=', 'users.id')
+        ->select('inventory_transactions.*', 'users.name as user_name')
+        ->where('inventory_transactions.batch_id', $id)
+        ->orderBy('inventory_transactions.id', 'desc')
+        ->get();
+
+    return response()->json($batch);
+});
+
+Route::post('/v1/batches', function (Request $request) {
+    $medicineId = $request->input('medicine_id');
+    $batchNumber = trim($request->input('batch_number'));
+    $mfdDate = $request->input('mfd_date', date('Y-m-d'));
+    $expDate = $request->input('exp_date');
+    $initialQty = (int)$request->input('initial_quantity', 100);
+    $unitCost = (float)$request->input('unit_cost', 0.00);
+    $storageLocation = $request->input('storage_location', 'Main Pharmacy Shelf');
+    $supplierId = $request->input('supplier_id');
+    $status = $request->input('status', 'available');
+
+    if (!$medicineId || !$batchNumber || !$expDate) {
+        return response()->json(['success' => false, 'message' => 'Medicine, Batch Number, and Expiry Date are required.'], 422);
+    }
+
+    $id = DB::table('medicine_batches')->insertGetId([
+        'medicine_id' => (int)$medicineId,
+        'supplier_id' => $supplierId ? (int)$supplierId : null,
+        'batch_number' => $batchNumber,
+        'mfd_date' => $mfdDate,
+        'exp_date' => $expDate,
+        'initial_quantity' => $initialQty,
+        'current_quantity' => $initialQty,
+        'unit_cost' => $unitCost,
+        'storage_location' => $storageLocation,
+        'status' => $status,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    $refNo = 'TRX-' . rand(10000, 99999);
+    DB::table('inventory_transactions')->insert([
+        'batch_id' => $id,
+        'user_id' => 1,
+        'transaction_type' => 'RESTOCK',
+        'quantity' => $initialQty,
+        'reference_no' => $refNo,
+        'notes' => "Initial stock batch intake for {$batchNumber}",
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'BATCH_CREATED',
+        'entity_type' => 'MedicineBatch',
+        'entity_id' => $id,
+        'payload' => json_encode(['batch_number' => $batchNumber, 'quantity' => $initialQty]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Medicine stock batch created successfully.', 'id' => $id], 201);
+});
+
+Route::put('/v1/batches/{id}', function (Request $request, $id) {
+    $batch = DB::table('medicine_batches')->where('id', $id)->first();
+    if (!$batch) {
+        return response()->json(['success' => false, 'message' => 'Batch not found.'], 404);
+    }
+
+    DB::table('medicine_batches')->where('id', $id)->update([
+        'medicine_id' => $request->input('medicine_id', $batch->medicine_id),
+        'supplier_id' => $request->input('supplier_id', $batch->supplier_id),
+        'batch_number' => $request->input('batch_number', $batch->batch_number),
+        'mfd_date' => $request->input('mfd_date', $batch->mfd_date),
+        'exp_date' => $request->input('exp_date', $batch->exp_date),
+        'initial_quantity' => $request->input('initial_quantity', $batch->initial_quantity),
+        'current_quantity' => $request->input('current_quantity', $batch->current_quantity),
+        'unit_cost' => $request->input('unit_cost', $batch->unit_cost),
+        'storage_location' => $request->input('storage_location', $batch->storage_location),
+        'status' => $request->input('status', $batch->status),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'BATCH_UPDATED',
+        'entity_type' => 'MedicineBatch',
+        'entity_id' => $id,
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Stock batch updated successfully.']);
+});
+
+Route::delete('/v1/batches/{id}', function ($id) {
+    $batch = DB::table('medicine_batches')->where('id', $id)->first();
+    if (!$batch) {
+        return response()->json(['success' => false, 'message' => 'Batch not found.'], 404);
+    }
+
+    DB::table('medicine_batches')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'BATCH_DELETED',
+        'entity_type' => 'MedicineBatch',
+        'entity_id' => $id,
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Stock batch deleted successfully.']);
+});
+
+Route::get('/v1/inventory-transactions', function () {
+    $transactions = DB::table('inventory_transactions')
+        ->join('medicine_batches', 'inventory_transactions.batch_id', '=', 'medicine_batches.id')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->leftJoin('suppliers', 'medicine_batches.supplier_id', '=', 'suppliers.id')
+        ->leftJoin('users', 'inventory_transactions.user_id', '=', 'users.id')
+        ->select(
+            'inventory_transactions.*',
+            'medicine_batches.batch_number',
+            'medicine_batches.exp_date',
+            'medicine_batches.storage_location',
+            'medicines.brand_name',
+            'medicines.generic_name',
+            'medicines.unit',
+            'suppliers.company_name as supplier_name',
+            'users.name as user_name'
+        )
+        ->orderBy('inventory_transactions.id', 'desc')
+        ->get();
+
+    return response()->json($transactions);
+});
+
+Route::post('/v1/inventory-transactions', function (Request $request) {
+    $batchId = $request->input('batch_id');
+    $type = $request->input('transaction_type');
+    $qty = (int)$request->input('quantity', 0);
+    $notes = $request->input('notes');
+
+    if (!$batchId || !$type || $qty <= 0) {
+        return response()->json(['success' => false, 'message' => 'Batch, Transaction Type, and Quantity (>0) are required.'], 422);
+    }
+
+    $batch = DB::table('medicine_batches')->where('id', $batchId)->first();
+    if (!$batch) {
+        return response()->json(['success' => false, 'message' => 'Medicine batch not found.'], 404);
+    }
+
+    $oldQty = (int)$batch->current_quantity;
+    $newQty = $oldQty;
+
+    if ($type === 'RESTOCK' || $type === 'RETURN') {
+        $newQty += $qty;
+    } else if ($type === 'DISPENSE' || $type === 'EXPIRED_DISCARD') {
+        $newQty = max(0, $oldQty - $qty);
+    } else if ($type === 'ADJUSTMENT') {
+        $newQty = $qty;
+    }
+
+    $newStatus = $batch->status;
+    if ($newQty <= 0) {
+        $newStatus = 'expired';
+    } else if ($newQty < 50) {
+        $newStatus = 'low';
+    } else if ($batch->exp_date < date('Y-m-d')) {
+        $newStatus = 'expired';
+    } else if ($newStatus !== 'recalled') {
+        $newStatus = 'available';
+    }
+
+    DB::table('medicine_batches')->where('id', $batchId)->update([
+        'current_quantity' => $newQty,
+        'status' => $newStatus,
+        'updated_at' => now()
+    ]);
+
+    $refNo = 'TRX-' . date('Ymd') . '-' . rand(1000, 9999);
+    $trxId = DB::table('inventory_transactions')->insertGetId([
+        'batch_id' => (int)$batchId,
+        'user_id' => $request->input('user_id', 1),
+        'transaction_type' => $type,
+        'quantity' => $qty,
+        'reference_no' => $refNo,
+        'notes' => $notes ?: "Stock {$type} of {$qty} units (Prev: {$oldQty} -> New: {$newQty})",
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'INVENTORY_TRANSACTION_LOGGED',
+        'entity_type' => 'InventoryTransaction',
+        'entity_id' => $trxId,
+        'payload' => json_encode(['batch_id' => $batchId, 'type' => $type, 'qty' => $qty, 'new_stock' => $newQty]),
+        'created_at' => now()
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => "Inventory transaction recorded. Batch stock updated ({$oldQty} → {$newQty}).",
+        'id' => $trxId,
+        'reference_no' => $refNo,
+        'new_quantity' => $newQty,
+        'batch_status' => $newStatus
+    ], 201);
+});
+
+
+

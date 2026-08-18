@@ -5,7 +5,7 @@ import {
   Search, Plus, RefreshCw, Database, Server, CheckCircle2, 
   AlertCircle, ChevronRight, Stethoscope, HeartPulse, Clock,
   Bot, AlertTriangle, Sparkles, Package, Pill, Layers, FileText,
-  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator, Send, MessageSquare, Check
+  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator, Send, MessageSquare, Check, Printer
 } from 'lucide-react';
 
 export default function RolePortal({ user, onLogout, theme, setTheme }) {
@@ -24,6 +24,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     if (pathname.includes('/dashboard/ai-triage')) return 'ai_triage';
     if (pathname.includes('/dashboard/patients')) return 'patients';
     if (pathname.includes('/dashboard/appointments')) return 'appointments';
+    if (pathname.includes('/dashboard/prescriptions')) return 'prescriptions';
     if (pathname.includes('/dashboard/schema')) return 'schema';
     return user.roleKey === 'super_admin' ? 'users' : 'dashboard';
   };
@@ -37,6 +38,21 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [aiRiskData, setAiRiskData] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
+  // FEFO Medicine Batches & Inventory Transactions State
+  const [batchesList, setBatchesList] = useState([]);
+  const [batchSearch, setBatchSearch] = useState('');
+  const [batchStatusFilter, setBatchStatusFilter] = useState('all');
+  const [batchSubTab, setBatchSubTab] = useState('inventory'); // 'inventory' or 'transactions'
+  const [transactionsList, setTransactionsList] = useState([]);
+  const [transactionSearch, setTransactionSearch] = useState('');
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState('all');
+  const [showCreateBatchModal, setShowCreateBatchModal] = useState(false);
+  const [showEditBatchModal, setShowEditBatchModal] = useState(false);
+  const [showDeleteBatchModal, setShowDeleteBatchModal] = useState(false);
+  const [showRecordTransactionModal, setShowRecordTransactionModal] = useState(false);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+
+
   // Appointments CRUD State
   const [appointmentSearch, setAppointmentSearch] = useState('');
   const [appointmentStatusFilter, setAppointmentStatusFilter] = useState('all');
@@ -44,6 +60,16 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
   const [showDeleteAppointmentModal, setShowDeleteAppointmentModal] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState(null);
+
+  // Prescriptions CRUD State
+  const [prescriptionsList, setPrescriptionsList] = useState([]);
+  const [prescriptionSearch, setPrescriptionSearch] = useState('');
+  const [prescriptionStatusFilter, setPrescriptionStatusFilter] = useState('all');
+  const [showCreatePrescriptionModal, setShowCreatePrescriptionModal] = useState(false);
+  const [showEditPrescriptionModal, setShowEditPrescriptionModal] = useState(false);
+  const [showDeletePrescriptionModal, setShowDeletePrescriptionModal] = useState(false);
+  const [showViewPrescriptionModal, setShowViewPrescriptionModal] = useState(false);
+  const [selectedPrescription, setSelectedPrescription] = useState(null);
 
   // Super Admin Users State
   const [usersList, setUsersList] = useState([]);
@@ -131,10 +157,29 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
   // Form States
+  const [prescriptionForm, setPrescriptionForm] = useState({
+    patient_id: 1, doctor_id: 1, appointment_id: '', status: 'ISSUED',
+    clinical_notes: 'Take prescribed medication after meals as directed.',
+    items: [
+      { medicine_id: 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take with plenty of water after food' }
+    ]
+  });
+
+  const [batchForm, setBatchForm] = useState({
+    medicine_id: 1, supplier_id: 1, batch_number: 'AMX-2026-N1',
+    mfd_date: '2025-06-01', exp_date: '2027-06-01', initial_quantity: 500,
+    unit_cost: 25.00, storage_location: 'Main Pharmacy Shelf - Rack A-01', status: 'available'
+  });
+
+  const [transactionForm, setTransactionForm] = useState({
+    batch_id: 1, transaction_type: 'RESTOCK', quantity: 100, notes: 'Routine stock intake'
+  });
+
   const [appointmentForm, setAppointmentForm] = useState({
     patient_id: 1, doctor_id: 1, appointment_date: new Date().toISOString().slice(0, 16),
     type: 'Consultation', priority: 'Normal', status: 'Scheduled', reason: 'Routine clinical consultation'
   });
+
 
   const [userForm, setUserForm] = useState({
     name: '', email: '', password: 'password123', role_id: 2,
@@ -191,6 +236,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     else if (tabId === 'ai_triage') path = '/dashboard/ai-triage';
     else if (tabId === 'patients') path = '/dashboard/patients';
     else if (tabId === 'appointments') path = '/dashboard/appointments';
+    else if (tabId === 'prescriptions') path = '/dashboard/prescriptions';
     else if (tabId === 'schema') path = '/dashboard/schema';
     
     navigate(path);
@@ -208,9 +254,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchDepartmentsData();
       fetchTriageLogsData();
       fetchAppointmentsData();
-
-      const batchesRes = await fetch('/api/v1/batches');
-      if (batchesRes.ok) setBatches(await batchesRes.json());
+      fetchPrescriptionsData();
+      fetchBatchesData();
+      fetchTransactionsData();
 
       const aiRes = await fetch('/api/v1/ai/inventory-risk');
       if (aiRes.ok) setAiRiskData(await aiRes.json());
@@ -224,6 +270,38 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } catch (err) {
       console.error('API Fetch error:', err);
       setBackendStatus({ loading: false, online: false, data: null });
+    }
+  };
+
+  const fetchBatchesData = async () => {
+    try {
+      const res = await fetch('/api/v1/batches');
+      if (res.ok) {
+        const data = await res.json();
+        setBatchesList(data);
+        setBatches(data);
+      }
+    } catch (err) {
+      console.error('Batches fetch error:', err);
+    }
+  };
+
+  const fetchTransactionsData = async () => {
+    try {
+      const res = await fetch('/api/v1/inventory-transactions');
+      if (res.ok) setTransactionsList(await res.json());
+    } catch (err) {
+      console.error('Transactions fetch error:', err);
+    }
+  };
+
+
+  const fetchPrescriptionsData = async () => {
+    try {
+      const res = await fetch('/api/v1/prescriptions');
+      if (res.ok) setPrescriptionsList(await res.json());
+    } catch (err) {
+      console.error('Prescriptions fetch error:', err);
     }
   };
 
@@ -322,6 +400,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     if (roleKey === 'super_admin') {
       items.push({ id: 'users', label: 'User Management', icon: UserCheck });
       items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
+      items.push({ id: 'prescriptions', label: 'Prescriptions (Rx)', icon: FileText });
       items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
       items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
@@ -336,6 +415,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } else {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
+      items.push({ id: 'prescriptions', label: 'Prescriptions (Rx)', icon: FileText });
       items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
       items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
@@ -353,6 +433,185 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   };
 
   const navItems = getNavItems();
+
+  // FEFO Stock Batches & Inventory Transactions Handlers
+  const handleCreateBatch = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/batches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batchForm)
+      });
+      if (res.ok) {
+        setShowCreateBatchModal(false);
+        setBatchForm({
+          medicine_id: medicinesList[0]?.id || 1, supplier_id: suppliersList[0]?.id || 1,
+          batch_number: 'BATCH-' + Math.floor(1000 + Math.random() * 9000),
+          mfd_date: new Date().toISOString().slice(0, 10),
+          exp_date: new Date(Date.now() + 365*24*60*60*1000).toISOString().slice(0, 10),
+          initial_quantity: 500, unit_cost: 25.00, storage_location: 'Main Pharmacy Shelf - Rack A-01', status: 'available'
+        });
+        fetchBatchesData();
+        fetchTransactionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateBatch = async (e) => {
+    e.preventDefault();
+    if (!selectedBatch) return;
+    try {
+      const res = await fetch(`/api/v1/batches/${selectedBatch.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedBatch)
+      });
+      if (res.ok) {
+        setShowEditBatchModal(false);
+        setSelectedBatch(null);
+        fetchBatchesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteBatch = async () => {
+    if (!selectedBatch) return;
+    try {
+      const res = await fetch(`/api/v1/batches/${selectedBatch.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteBatchModal(false);
+        setSelectedBatch(null);
+        fetchBatchesData();
+        fetchTransactionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleRecordTransaction = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/inventory-transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(transactionForm)
+      });
+      if (res.ok) {
+        setShowRecordTransactionModal(false);
+        setTransactionForm({
+          batch_id: batchesList[0]?.id || 1, transaction_type: 'RESTOCK', quantity: 100, notes: 'Routine stock movement intake'
+        });
+        fetchBatchesData();
+        fetchTransactionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Prescription Handlers
+
+  const handleAddPrescriptionItem = () => {
+    setPrescriptionForm(prev => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        { medicine_id: medicinesList[0]?.id || 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take with water after meals' }
+      ]
+    }));
+  };
+
+  const handleRemovePrescriptionItem = (index) => {
+    setPrescriptionForm(prev => ({
+      ...prev,
+      items: prev.items.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  const handleUpdatePrescriptionItem = (index, field, value) => {
+    setPrescriptionForm(prev => {
+      const updatedItems = [...prev.items];
+      updatedItems[index] = { ...updatedItems[index], [field]: value };
+      return { ...prev, items: updatedItems };
+    });
+  };
+
+  const handleCreatePrescription = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/prescriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(prescriptionForm)
+      });
+      if (res.ok) {
+        setShowCreatePrescriptionModal(false);
+        setPrescriptionForm({
+          patient_id: patients[0]?.id || 1, doctor_id: staffList[0]?.id || 1, appointment_id: '', status: 'ISSUED',
+          clinical_notes: 'Take prescribed medication after meals as directed.',
+          items: [
+            { medicine_id: medicinesList[0]?.id || 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take with plenty of water after food' }
+          ]
+        });
+        fetchPrescriptionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdatePrescription = async (e) => {
+    e.preventDefault();
+    if (!selectedPrescription) return;
+    try {
+      const res = await fetch(`/api/v1/prescriptions/${selectedPrescription.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedPrescription)
+      });
+      if (res.ok) {
+        setShowEditPrescriptionModal(false);
+        setSelectedPrescription(null);
+        fetchPrescriptionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeletePrescription = async () => {
+    if (!selectedPrescription) return;
+    try {
+      const res = await fetch(`/api/v1/prescriptions/${selectedPrescription.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeletePrescriptionModal(false);
+        setSelectedPrescription(null);
+        fetchPrescriptionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleOpenRxForAppointment = (apt) => {
+    setPrescriptionForm({
+      patient_id: apt.patient_id,
+      doctor_id: apt.doctor_id,
+      appointment_id: apt.id,
+      status: 'ISSUED',
+      clinical_notes: `Prescription issued following ${apt.type} appointment on ${apt.appointment_date}. Reason: ${apt.reason || 'Clinical Consultation'}.`,
+      items: [
+        { medicine_id: medicinesList[0]?.id || 1, dosage: '500mg', frequency: 'BD - Twice daily', duration_days: 7, quantity_prescribed: 14, instructions: 'Take after meals as prescribed' }
+      ]
+    });
+    setShowCreatePrescriptionModal(true);
+  };
 
   // Appointment Handlers
   const handleCreateAppointment = async (e) => {
@@ -899,6 +1158,19 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setRecalculatingAll(false);
   };
 
+  const filteredPrescriptions = prescriptionsList.filter(rx => {
+    const matchesSearch = 
+      (rx.prescription_code && rx.prescription_code.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.patient_name && rx.patient_name.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.patient_code && rx.patient_code.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.doctor_name && rx.doctor_name.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.clinical_notes && rx.clinical_notes.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
+      (rx.items && rx.items.some(item => item.brand_name.toLowerCase().includes(prescriptionSearch.toLowerCase()) || item.generic_name.toLowerCase().includes(prescriptionSearch.toLowerCase())));
+
+    if (prescriptionStatusFilter === 'all') return matchesSearch;
+    return matchesSearch && rx.status === prescriptionStatusFilter;
+  });
+
   const filteredAppointments = appointments.filter(a => {
     const matchesSearch = 
       (a.patient_name && a.patient_name.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
@@ -965,11 +1237,41 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     (c.description && c.description.toLowerCase().includes(categorySearch.toLowerCase()))
   );
 
-  const filteredSuppliers = suppliersList.filter(s => 
-    s.company_name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
-    s.supplier_code.toLowerCase().includes(supplierSearch.toLowerCase()) ||
-    (s.contact_person && s.contact_person.toLowerCase().includes(supplierSearch.toLowerCase()))
-  );
+  const filteredBatches = batchesList.filter(b => {
+    const matchesSearch = 
+      b.batch_number.toLowerCase().includes(batchSearch.toLowerCase()) ||
+      b.brand_name.toLowerCase().includes(batchSearch.toLowerCase()) ||
+      b.generic_name.toLowerCase().includes(batchSearch.toLowerCase()) ||
+      (b.storage_location && b.storage_location.toLowerCase().includes(batchSearch.toLowerCase())) ||
+      (b.supplier_name && b.supplier_name.toLowerCase().includes(batchSearch.toLowerCase()));
+
+    if (batchStatusFilter === 'all') return matchesSearch;
+    return matchesSearch && b.status === batchStatusFilter;
+  });
+
+  const filteredTransactions = transactionsList.filter(t => {
+    const matchesSearch = 
+      (t.reference_no && t.reference_no.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.batch_number && t.batch_number.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.brand_name && t.brand_name.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.notes && t.notes.toLowerCase().includes(transactionSearch.toLowerCase())) ||
+      (t.user_name && t.user_name.toLowerCase().includes(transactionSearch.toLowerCase()));
+
+    if (transactionTypeFilter === 'all') return matchesSearch;
+    return matchesSearch && t.transaction_type === transactionTypeFilter;
+  });
+
+  // Batch Counters
+  const totalStockUnits = batchesList.reduce((acc, curr) => acc + (parseInt(curr.current_quantity) || 0), 0);
+  const availableBatchesCount = batchesList.filter(b => b.status === 'available').length;
+  const lowBatchesCount = batchesList.filter(b => b.status === 'low').length;
+  const expiredBatchesCount = batchesList.filter(b => b.status === 'expired' || b.exp_date < new Date().toISOString().slice(0, 10)).length;
+
+  // Prescription Counters
+
+  const issuedRxCount = prescriptionsList.filter(r => r.status === 'ISSUED').length;
+  const dispensedRxCount = prescriptionsList.filter(r => r.status === 'DISPENSED').length;
+  const draftRxCount = prescriptionsList.filter(r => r.status === 'DRAFT').length;
 
   // Appointment Counters
   const scheduledCount = appointments.filter(a => a.status === 'Scheduled').length;
@@ -1088,13 +1390,15 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             <h1 style={{ fontSize: '1.7rem', fontWeight: '800' }}>
               {activeTab === 'users' ? 'User Management Directory' : (
                 activeTab === 'appointments' ? 'Clinical Appointments & Patient Consultations' : (
-                  activeTab === 'ai_triage' ? 'MediSync AI Clinical Symptom Triage & Chat' : (
-                    activeTab === 'departments' ? 'Hospital Departments & Wards' : (
-                      activeTab === 'staff' ? 'Hospital Staff Roster' : (
-                        activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
-                          activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
-                            activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
-                              activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                  activeTab === 'prescriptions' ? 'Clinical Prescriptions (Rx) Management' : (
+                    activeTab === 'ai_triage' ? 'MediSync AI Clinical Symptom Triage & Chat' : (
+                      activeTab === 'departments' ? 'Hospital Departments & Wards' : (
+                        activeTab === 'staff' ? 'Hospital Staff Roster' : (
+                          activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
+                            activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
+                              activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
+                                activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                              )
                             )
                           )
                         )
@@ -1119,6 +1423,182 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             </button>
           </div>
         </header>
+
+        {/* TAB: CLINICAL PRESCRIPTIONS (RX) CRUD */}
+        {activeTab === 'prescriptions' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL RX PRESCRIPTIONS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{prescriptionsList.length} Prescriptions</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ISSUED / ACTIVE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{issuedRxCount} Active Rx</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>DISPENSED BY PHARMACY</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{dispensedRxCount} Dispensed</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>DRAFT / PENDING</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{draftRxCount} Drafts</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search by Rx code, patient name, doctor, notes, or prescribed medicine..." 
+                  value={prescriptionSearch}
+                  onChange={e => setPrescriptionSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                {[
+                  { id: 'all', label: 'All Statuses' },
+                  { id: 'ISSUED', label: 'Issued' },
+                  { id: 'DISPENSED', label: 'Dispensed' },
+                  { id: 'DRAFT', label: 'Draft' },
+                  { id: 'CANCELLED', label: 'Cancelled' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setPrescriptionStatusFilter(f.id)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      background: prescriptionStatusFilter === f.id ? 'var(--primary)' : 'transparent',
+                      color: prescriptionStatusFilter === f.id ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => setShowCreatePrescriptionModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <FileText size={18} />
+                <span>Issue New Prescription</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>RX CODE / DATE</th>
+                    <th style={{ padding: '14px' }}>PATIENT (EHR)</th>
+                    <th style={{ padding: '14px' }}>PRESCRIBING DOCTOR</th>
+                    <th style={{ padding: '14px' }}>LINKED APPOINTMENT</th>
+                    <th style={{ padding: '14px' }}>PRESCRIBED MEDICATIONS</th>
+                    <th style={{ padding: '14px' }}>STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPrescriptions.map(rx => {
+                    const hasAllergies = rx.allergies && rx.allergies.toLowerCase() !== 'none' && rx.allergies.toLowerCase() !== 'none reported';
+                    return (
+                      <tr key={rx.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '800', color: 'var(--primary)', fontFamily: 'monospace' }}>{rx.prescription_code}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                            {rx.issued_at ? new Date(rx.issued_at).toLocaleDateString() : 'Draft'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '700' }}>{rx.patient_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{rx.patient_code}</div>
+                          {hasAllergies && (
+                            <div style={{ marginTop: '4px' }}>
+                              <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.7rem', fontWeight: '700' }}>
+                                ⚠️ Allergy: {rx.allergies}
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '700' }}>Dr. {rx.doctor_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{rx.specialization || 'General Care'} ({rx.department_name || 'OPD'})</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          {rx.appointment_id ? (
+                            <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                              Appt #{rx.appointment_id} ({rx.appointment_type || 'Consultation'})
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Direct Clinical Rx</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px', maxWidth: '240px' }}>
+                          {rx.items && rx.items.length > 0 ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                              {rx.items.slice(0, 2).map((item, idx) => (
+                                <div key={idx} style={{ fontSize: '0.8rem', fontWeight: '600' }}>
+                                  • {item.brand_name} ({item.dosage}) - <em>{item.frequency}</em>
+                                </div>
+                              ))}
+                              {rx.items.length > 2 && (
+                                <span style={{ fontSize: '0.72rem', color: 'var(--teal-accent)', fontWeight: '700' }}>
+                                  +{rx.items.length - 2} additional items...
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>No items listed</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <span className={`badge ${
+                            rx.status === 'DISPENSED' ? 'badge-success' : (rx.status === 'ISSUED' ? 'badge-primary' : (rx.status === 'DRAFT' ? 'badge-warning' : 'badge-danger'))
+                          }`}>
+                            {rx.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button 
+                              onClick={() => { setSelectedPrescription(rx); setShowViewPrescriptionModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
+                              title="View & Print Prescription Slip"
+                            >
+                              <Printer size={13} />
+                              <span>View Slip</span>
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedPrescription(rx); setShowEditPrescriptionModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                            >
+                              <Edit size={13} />
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedPrescription(rx); setShowDeletePrescriptionModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* TAB: CLINICAL APPOINTMENTS & CONSULTATIONS */}
         {activeTab === 'appointments' && (
@@ -1252,21 +1732,29 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                         </span>
                       </td>
                       <td style={{ padding: '14px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button 
+                            onClick={() => handleOpenRxForAppointment(a)}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
+                            title="Issue Rx Prescription for this appointment"
+                          >
+                            <FileText size={13} />
+                            <span>Issue Rx</span>
+                          </button>
                           <button 
                             onClick={() => { setSelectedAppointment(a); setShowEditAppointmentModal(true); }}
                             className="btn btn-secondary" 
-                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                            style={{ padding: '6px 8px', fontSize: '0.75rem' }}
                           >
-                            <Edit size={14} />
-                            <span>Edit</span>
+                            <Edit size={13} />
                           </button>
                           <button 
                             onClick={() => { setSelectedAppointment(a); setShowDeleteAppointmentModal(true); }}
                             className="btn btn-secondary" 
-                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                            style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={13} />
                           </button>
                         </div>
                       </td>
@@ -1281,7 +1769,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         {/* TAB: MEDISYNC AI CLINICAL TRIAGE & INTERACTIVE CHAT */}
         {activeTab === 'ai_triage' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            {/* KPI Stat Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="glass-panel" style={{ padding: '16px' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL TRIAGE ASSESSMENTS</div>
@@ -1304,7 +1791,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               </div>
             </div>
 
-            {/* Sub-View Switcher Bar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
                 <button
@@ -1357,7 +1843,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               )}
             </div>
 
-            {/* MODE 1: INTERACTIVE AI CLINICAL CHAT */}
             {triageSubView === 'chat' && (
               <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '540px', padding: '0', overflow: 'hidden' }}>
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.15)' }}>
@@ -1451,7 +1936,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               </div>
             )}
 
-            {/* MODE 2: SUPER ADMIN & CLINICIAN LOG INSPECTION */}
             {triageSubView === 'inspection' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ position: 'relative', width: '100%' }}>
@@ -2372,34 +2856,323 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
-        {/* FEFO Batches Tab */}
+        {/* TAB: FEFO STOCK BATCHES & INVENTORY TRANSACTIONS */}
         {activeTab === 'batches' && (
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px' }}>FEFO Multi-Batch Inventory</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                  <th style={{ padding: '12px' }}>MEDICINE</th>
-                  <th style={{ padding: '12px' }}>BATCH NO.</th>
-                  <th style={{ padding: '12px' }}>EXPIRY DATE</th>
-                  <th style={{ padding: '12px' }}>QTY AVAILABLE</th>
-                  <th style={{ padding: '12px' }}>STATUS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batches.map(b => (
-                  <tr key={b.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '12px', fontWeight: '700' }}>{b.brand_name} ({b.generic_name})</td>
-                    <td style={{ padding: '12px', fontFamily: 'monospace' }}>{b.batch_number}</td>
-                    <td style={{ padding: '12px', color: 'var(--warning)', fontWeight: '700' }}>{b.exp_date}</td>
-                    <td style={{ padding: '12px', fontWeight: '700', color: 'var(--primary)' }}>{b.current_quantity} {b.unit}</td>
-                    <td style={{ padding: '12px' }}><span className="badge badge-success">{b.status}</span></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL FEFO BATCHES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{batchesList.length} Active Batches</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL STOCK UNITS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{totalStockUnits} Units</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>AVAILABLE BATCHES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{availableBatchesCount} Available</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>EXPIRED / LOW STOCK</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{expiredBatchesCount + lowBatchesCount} Risk Batches</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                <button
+                  onClick={() => setBatchSubTab('inventory')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: batchSubTab === 'inventory' ? 'var(--primary)' : 'transparent',
+                    color: batchSubTab === 'inventory' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Package size={16} />
+                  <span>Multi-Batch FEFO Inventory ({batchesList.length})</span>
+                </button>
+                <button
+                  onClick={() => setBatchSubTab('transactions')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: batchSubTab === 'transactions' ? 'var(--primary)' : 'transparent',
+                    color: batchSubTab === 'transactions' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <RefreshCw size={16} />
+                  <span>Stock Movements Audit Log ({transactionsList.length})</span>
+                </button>
+              </div>
+
+              {batchSubTab === 'inventory' ? (
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button onClick={() => setShowRecordTransactionModal(true)} className="btn btn-secondary" style={{ color: 'var(--teal-accent)', borderColor: 'var(--teal-accent)' }}>
+                    <RefreshCw size={16} />
+                    <span>Record Stock Movement</span>
+                  </button>
+                  <button onClick={() => setShowCreateBatchModal(true)} className="btn btn-primary">
+                    <Plus size={18} />
+                    <span>Intake New Stock Batch</span>
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setShowRecordTransactionModal(true)} className="btn btn-primary">
+                  <RefreshCw size={18} />
+                  <span>Log New Stock Transaction</span>
+                </button>
+              )}
+            </div>
+
+            {batchSubTab === 'inventory' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Search batch by batch number, medicine name, storage rack, or supplier..." 
+                      value={batchSearch}
+                      onChange={e => setBatchSearch(e.target.value)}
+                      style={{ paddingLeft: '42px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                    {[
+                      { id: 'all', label: 'All Batches' },
+                      { id: 'available', label: 'Available' },
+                      { id: 'low', label: 'Low Stock' },
+                      { id: 'expired', label: 'Expired' },
+                      { id: 'recalled', label: 'Recalled' },
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setBatchStatusFilter(f.id)}
+                        className="btn"
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '0.78rem',
+                          background: batchStatusFilter === f.id ? 'var(--primary)' : 'transparent',
+                          color: batchStatusFilter === f.id ? '#fff' : 'var(--text-muted)',
+                          border: 'none',
+                          borderRadius: '6px'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px' }}>FEFO BATCH NO</th>
+                        <th style={{ padding: '14px' }}>FORMULARY MEDICINE</th>
+                        <th style={{ padding: '14px' }}>EXPIRY DATE (FEFO)</th>
+                        <th style={{ padding: '14px' }}>STOCK QTY (CURR / INIT)</th>
+                        <th style={{ padding: '14px' }}>UNIT COST</th>
+                        <th style={{ padding: '14px' }}>STORAGE LOCATION</th>
+                        <th style={{ padding: '14px' }}>SUPPLIER</th>
+                        <th style={{ padding: '14px' }}>STATUS</th>
+                        <th style={{ padding: '14px' }}>ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredBatches.map(b => {
+                        const isExpired = b.status === 'expired' || b.exp_date < new Date().toISOString().slice(0, 10);
+                        const isLow = b.status === 'low' || (b.current_quantity > 0 && b.current_quantity < 50);
+
+                        return (
+                          <tr key={b.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '800', color: 'var(--primary)', fontFamily: 'monospace' }}>{b.batch_number}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>MFD: {b.mfd_date}</div>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '700' }}>{b.brand_name}</div>
+                              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{b.generic_name} ({b.dosage_form || 'Tablet'})</div>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '800', color: isExpired ? 'var(--danger)' : 'var(--warning)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <Clock size={14} />
+                                <span>{b.exp_date}</span>
+                              </div>
+                              {isExpired && <span style={{ fontSize: '0.68rem', color: 'var(--danger)', fontWeight: '700' }}>EXPIRED</span>}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ fontWeight: '800', fontSize: '1rem', color: isLow ? 'var(--warning)' : (isExpired ? 'var(--danger)' : 'var(--success)') }}>
+                                {b.current_quantity} {b.unit || 'pcs'}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Initial: {b.initial_quantity}</div>
+                            </td>
+                            <td style={{ padding: '14px', fontWeight: '700', color: 'var(--primary)' }}>
+                              LKR {parseFloat(b.unit_cost || 0).toFixed(2)}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--teal-accent)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                                {b.storage_location || 'Main Shelf'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                              {b.supplier_name || 'Central Pharmacy Stock'}
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <span className={`badge ${
+                                isExpired ? 'badge-danger' : (isLow ? 'badge-warning' : 'badge-success')
+                              }`}>
+                                {b.status}
+                              </span>
+                            </td>
+                            <td style={{ padding: '14px' }}>
+                              <div style={{ display: 'flex', gap: '6px' }}>
+                                <button 
+                                  onClick={() => { setTransactionForm({ ...transactionForm, batch_id: b.id }); setShowRecordTransactionModal(true); }}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
+                                  title="Record Stock Intake or Dispense"
+                                >
+                                  <RefreshCw size={13} />
+                                  <span>Move</span>
+                                </button>
+                                <button 
+                                  onClick={() => { setSelectedBatch(b); setShowEditBatchModal(true); }}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button 
+                                  onClick={() => { setSelectedBatch(b); setShowDeleteBatchModal(true); }}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {batchSubTab === 'transactions' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Search transactions by reference no, batch no, medicine, user, or notes..." 
+                      value={transactionSearch}
+                      onChange={e => setTransactionSearch(e.target.value)}
+                      style={{ paddingLeft: '42px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                    {[
+                      { id: 'all', label: 'All Movements' },
+                      { id: 'RESTOCK', label: 'Restock' },
+                      { id: 'DISPENSE', label: 'Dispense' },
+                      { id: 'ADJUSTMENT', label: 'Adjustment' },
+                      { id: 'RETURN', label: 'Return' },
+                      { id: 'EXPIRED_DISCARD', label: 'Discarded' },
+                    ].map(f => (
+                      <button
+                        key={f.id}
+                        onClick={() => setTransactionTypeFilter(f.id)}
+                        className="btn"
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '0.78rem',
+                          background: transactionTypeFilter === f.id ? 'var(--primary)' : 'transparent',
+                          color: transactionTypeFilter === f.id ? '#fff' : 'var(--text-muted)',
+                          border: 'none',
+                          borderRadius: '6px'
+                        }}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px' }}>REFERENCE NO / TIME</th>
+                        <th style={{ padding: '14px' }}>FORMULARY MEDICINE</th>
+                        <th style={{ padding: '14px' }}>BATCH NUMBER</th>
+                        <th style={{ padding: '14px' }}>MOVEMENT TYPE</th>
+                        <th style={{ padding: '14px' }}>QUANTITY MOVED</th>
+                        <th style={{ padding: '14px' }}>PERFORMED BY STAFF</th>
+                        <th style={{ padding: '14px' }}>MOVEMENT NOTES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredTransactions.map(t => (
+                        <tr key={t.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ fontWeight: '800', color: 'var(--primary)', fontFamily: 'monospace' }}>{t.reference_no}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                              {new Date(t.created_at).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ fontWeight: '700' }}>{t.brand_name}</div>
+                            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{t.generic_name}</div>
+                          </td>
+                          <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--teal-accent)' }}>
+                            {t.batch_number}
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <span style={{ 
+                              padding: '4px 10px', borderRadius: '6px', fontWeight: '800', fontSize: '0.78rem',
+                              background: t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? 'rgba(16, 185, 129, 0.2)' : (t.transaction_type === 'DISPENSE' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(239, 68, 68, 0.2)'),
+                              color: t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? 'var(--success)' : (t.transaction_type === 'DISPENSE' ? 'var(--primary)' : 'var(--danger)')
+                            }}>
+                              {t.transaction_type}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: '800', fontSize: '1rem', color: t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? 'var(--success)' : 'var(--danger)' }}>
+                            {t.transaction_type === 'RESTOCK' || t.transaction_type === 'RETURN' ? `+${t.quantity}` : `-${t.quantity}`} {t.unit || 'units'}
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ fontWeight: '600' }}>{t.user_name || 'System Admin'}</div>
+                          </td>
+                          <td style={{ padding: '14px', color: 'var(--text-muted)', fontSize: '0.82rem', maxWidth: '240px' }}>
+                            {t.notes || 'Routine stock update.'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
+
 
         {/* Database Architecture Tab */}
         {activeTab === 'schema' && (
@@ -2409,6 +3182,259 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
       </main>
+
+      {/* CREATE PRESCRIPTION MODAL */}
+      {showCreatePrescriptionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreatePrescriptionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Issue New Clinical Prescription (Rx)</h3>
+            <form onSubmit={handleCreatePrescription} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Patient (EHR)</label>
+                  <select className="input-field" value={prescriptionForm.patient_id} onChange={e => setPrescriptionForm({...prescriptionForm, patient_id: parseInt(e.target.value)})}>
+                    {patients.map(p => (
+                      <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescribing Doctor</label>
+                  <select className="input-field" value={prescriptionForm.doctor_id} onChange={e => setPrescriptionForm({...prescriptionForm, doctor_id: parseInt(e.target.value)})}>
+                    {staffList.map(st => (
+                      <option key={st.id} value={st.id}>{st.employee_code} - Dr. {st.first_name} {st.last_name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Link Clinical Appointment (Optional)</label>
+                  <select className="input-field" value={prescriptionForm.appointment_id || ''} onChange={e => setPrescriptionForm({...prescriptionForm, appointment_id: e.target.value ? parseInt(e.target.value) : ''})}>
+                    <option value="">Direct Prescription (Unlinked)</option>
+                    {appointments.map(a => (
+                      <option key={a.id} value={a.id}>Appt #{a.id} - {a.patient_name} ({new Date(a.appointment_date).toLocaleDateString()})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescription Status</label>
+                  <select className="input-field" value={prescriptionForm.status} onChange={e => setPrescriptionForm({...prescriptionForm, status: e.target.value})}>
+                    <option value="ISSUED">ISSUED - Ready for Dispensing</option>
+                    <option value="DRAFT">DRAFT - Pending Doctor Approval</option>
+                    <option value="DISPENSED">DISPENSED - Pharmacy Fulfilled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Instructions & Notes</label>
+                <textarea className="input-field" rows={2} value={prescriptionForm.clinical_notes} onChange={e => setPrescriptionForm({...prescriptionForm, clinical_notes: e.target.value})} placeholder="Special clinical instructions, dietary cautions, follow-up advice..." />
+              </div>
+
+              {/* Dynamic Prescription Items Builder */}
+              <div style={{ marginTop: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <label style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--primary)' }}>Prescribed Medicines List ({prescriptionForm.items.length})</label>
+                  <button type="button" onClick={handleAddPrescriptionItem} className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: '0.78rem' }}>
+                    <Plus size={14} />
+                    <span>Add Item</span>
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {prescriptionForm.items.map((item, idx) => (
+                    <div key={idx} className="glass-panel" style={{ padding: '12px', background: 'rgba(0,0,0,0.15)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 30px', gap: '8px', alignItems: 'center' }}>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Medicine</label>
+                          <select className="input-field" value={item.medicine_id} onChange={e => handleUpdatePrescriptionItem(idx, 'medicine_id', parseInt(e.target.value))}>
+                            {medicinesList.map(m => (
+                              <option key={m.id} value={m.id}>{m.brand_name} ({m.generic_name}) - {m.dosage_form}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Dosage</label>
+                          <input type="text" className="input-field" value={item.dosage} onChange={e => handleUpdatePrescriptionItem(idx, 'dosage', e.target.value)} placeholder="500mg" />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Qty Prescribed</label>
+                          <input type="number" className="input-field" value={item.quantity_prescribed} onChange={e => handleUpdatePrescriptionItem(idx, 'quantity_prescribed', parseInt(e.target.value))} />
+                        </div>
+                        {prescriptionForm.items.length > 1 && (
+                          <button type="button" onClick={() => handleRemovePrescriptionItem(idx)} style={{ background: 'transparent', border: 'none', color: 'var(--danger)', cursor: 'pointer', marginTop: '14px' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: '8px' }}>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Frequency</label>
+                          <input type="text" className="input-field" value={item.frequency} onChange={e => handleUpdatePrescriptionItem(idx, 'frequency', e.target.value)} placeholder="BD - Twice daily" />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Duration (Days)</label>
+                          <input type="number" className="input-field" value={item.duration_days} onChange={e => handleUpdatePrescriptionItem(idx, 'duration_days', parseInt(e.target.value))} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Patient Instructions</label>
+                          <input type="text" className="input-field" value={item.instructions} onChange={e => handleUpdatePrescriptionItem(idx, 'instructions', e.target.value)} placeholder="Take with food" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '14px' }}>
+                <button type="button" onClick={() => setShowCreatePrescriptionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Issue Rx Prescription</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW & PRINT PRESCRIPTION SLIP MODAL */}
+      {showViewPrescriptionModal && selectedPrescription && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '600px', padding: '32px', position: 'relative', background: '#fff', color: '#1e293b' }}>
+            <button onClick={() => setShowViewPrescriptionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            {/* Clinical Slip Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #0f172a', paddingBottom: '14px', marginBottom: '16px' }}>
+              <div>
+                <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#0f172a', margin: 0 }}>MediSync Enterprise Healthcare</h2>
+                <div style={{ fontSize: '0.8rem', color: '#64748b' }}>Central Hospital • Clinical Pharmacy Services</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#4f46e5', fontFamily: 'monospace' }}>{selectedPrescription.prescription_code}</div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Issued: {selectedPrescription.issued_at ? new Date(selectedPrescription.issued_at).toLocaleDateString() : 'Draft'}</div>
+              </div>
+            </div>
+
+            {/* Patient & Doctor Info Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.85rem' }}>
+              <div>
+                <strong style={{ color: '#0f172a' }}>PATIENT DETAILS:</strong>
+                <div>{selectedPrescription.patient_name} ({selectedPrescription.patient_code})</div>
+                <div>Blood Group: <strong>{selectedPrescription.blood_group || 'O+'}</strong> • Phone: {selectedPrescription.patient_phone || 'N/A'}</div>
+                {selectedPrescription.allergies && selectedPrescription.allergies.toLowerCase() !== 'none' && (
+                  <div style={{ color: '#dc2626', fontWeight: '700', marginTop: '4px' }}>⚠️ Allergy Alert: {selectedPrescription.allergies}</div>
+                )}
+              </div>
+              <div>
+                <strong style={{ color: '#0f172a' }}>PRESCRIBING CLINICIAN:</strong>
+                <div>Dr. {selectedPrescription.doctor_name}</div>
+                <div>{selectedPrescription.specialization || 'Cardiology Specialist'}</div>
+                <div style={{ color: '#64748b', fontSize: '0.78rem' }}>Ward: {selectedPrescription.department_name || 'General OPD'}</div>
+              </div>
+            </div>
+
+            {/* Prescribed Items Table */}
+            <h4 style={{ fontSize: '0.95rem', fontWeight: '800', color: '#0f172a', marginBottom: '8px' }}>Rx Prescribed Medication Protocol:</h4>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem', marginBottom: '16px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #cbd5e1', background: '#f1f5f9', color: '#475569' }}>
+                  <th style={{ padding: '8px' }}>MEDICINE & FORMULA</th>
+                  <th style={{ padding: '8px' }}>DOSAGE</th>
+                  <th style={{ padding: '8px' }}>FREQUENCY</th>
+                  <th style={{ padding: '8px' }}>DURATION</th>
+                  <th style={{ padding: '8px' }}>QTY</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedPrescription.items && selectedPrescription.items.map((item, idx) => (
+                  <tr key={idx} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                    <td style={{ padding: '8px', fontWeight: '700' }}>{item.brand_name} ({item.generic_name})</td>
+                    <td style={{ padding: '8px' }}>{item.dosage}</td>
+                    <td style={{ padding: '8px' }}>{item.frequency}</td>
+                    <td style={{ padding: '8px' }}>{item.duration_days} days</td>
+                    <td style={{ padding: '8px', fontWeight: '700' }}>{item.quantity_prescribed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            {selectedPrescription.clinical_notes && (
+              <div style={{ background: '#f8fafc', padding: '10px 14px', borderRadius: '6px', fontSize: '0.8rem', marginBottom: '16px', color: '#334155' }}>
+                <strong>Clinical Notes:</strong> {selectedPrescription.clinical_notes}
+              </div>
+            )}
+
+            {/* Footer Signature & Status */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '12px', borderTop: '1px solid #e2e8f0' }}>
+              <span style={{ fontSize: '0.8rem', fontWeight: '700', color: selectedPrescription.status === 'DISPENSED' ? '#16a34a' : '#4f46e5' }}>
+                STATUS: {selectedPrescription.status}
+              </span>
+              <button onClick={() => window.print()} className="btn btn-primary" style={{ padding: '6px 14px', fontSize: '0.82rem' }}>
+                <Printer size={14} />
+                <span>Print Rx Slip</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PRESCRIPTION MODAL */}
+      {showEditPrescriptionModal && selectedPrescription && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditPrescriptionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Prescription {selectedPrescription.prescription_code}</h3>
+            <form onSubmit={handleUpdatePrescription} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescription Status</label>
+                <select className="input-field" value={selectedPrescription.status} onChange={e => setSelectedPrescription({...selectedPrescription, status: e.target.value})}>
+                  <option value="ISSUED">ISSUED - Ready for Dispensing</option>
+                  <option value="DISPENSED">DISPENSED - Pharmacy Fulfilled</option>
+                  <option value="DRAFT">DRAFT - Pending Doctor Review</option>
+                  <option value="CANCELLED">CANCELLED - Revoked</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Instructions & Notes</label>
+                <textarea className="input-field" rows={3} value={selectedPrescription.clinical_notes || ''} onChange={e => setSelectedPrescription({...selectedPrescription, clinical_notes: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditPrescriptionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Prescription</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE PRESCRIPTION MODAL */}
+      {showDeletePrescriptionModal && selectedPrescription && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Prescription Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete prescription <strong>{selectedPrescription.prescription_code}</strong> for patient <strong>{selectedPrescription.patient_name}</strong>?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeletePrescriptionModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeletePrescription} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Prescription</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CREATE APPOINTMENT MODAL */}
       {showCreateAppointmentModal && (
@@ -3576,18 +4602,195 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         </div>
       )}
 
-      {/* DELETE SUPPLIER MODAL */}
-      {showDeleteSupplierModal && selectedSupplier && (
+      {/* CREATE STOCK BATCH MODAL */}
+      {showCreateBatchModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateBatchModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Intake New FEFO Medicine Stock Batch</h3>
+            <form onSubmit={handleCreateBatch} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Formulary Medicine</label>
+                  <select className="input-field" value={batchForm.medicine_id} onChange={e => setBatchForm({...batchForm, medicine_id: parseInt(e.target.value)})}>
+                    {medicinesList.map(m => (
+                      <option key={m.id} value={m.id}>{m.brand_name} ({m.generic_name})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Supplier</label>
+                  <select className="input-field" value={batchForm.supplier_id || ''} onChange={e => setBatchForm({...batchForm, supplier_id: e.target.value ? parseInt(e.target.value) : ''})}>
+                    <option value="">Central Pharmacy Intake (No Supplier)</option>
+                    {suppliersList.map(s => (
+                      <option key={s.id} value={s.id}>{s.supplier_code} - {s.company_name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Batch Number</label>
+                  <input type="text" className="input-field" required value={batchForm.batch_number} onChange={e => setBatchForm({...batchForm, batch_number: e.target.value})} placeholder="AMX-2026-N1" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Storage Rack / Location</label>
+                  <input type="text" className="input-field" value={batchForm.storage_location} onChange={e => setBatchForm({...batchForm, storage_location: e.target.value})} placeholder="Rack B-14, Cold Shelf C-02" />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Manufacture Date (MFD)</label>
+                  <input type="date" className="input-field" required value={batchForm.mfd_date} onChange={e => setBatchForm({...batchForm, mfd_date: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--danger)', fontWeight: '700', display: 'block', marginBottom: '4px' }}>Expiry Date (FEFO)</label>
+                  <input type="date" className="input-field" required value={batchForm.exp_date} onChange={e => setBatchForm({...batchForm, exp_date: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Initial Stock Qty</label>
+                  <input type="number" className="input-field" required value={batchForm.initial_quantity} onChange={e => setBatchForm({...batchForm, initial_quantity: parseInt(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Unit Cost (LKR)</label>
+                  <input type="number" step="0.01" className="input-field" value={batchForm.unit_cost} onChange={e => setBatchForm({...batchForm, unit_cost: parseFloat(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <select className="input-field" value={batchForm.status} onChange={e => setBatchForm({...batchForm, status: e.target.value})}>
+                    <option value="available">Available</option>
+                    <option value="low">Low Stock</option>
+                    <option value="expired">Expired</option>
+                    <option value="recalled">Recalled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateBatchModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Intake Stock Batch</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RECORD INVENTORY STOCK MOVEMENT MODAL */}
+      {showRecordTransactionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowRecordTransactionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Record Inventory Stock Movement</h3>
+            <form onSubmit={handleRecordTransaction} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Target FEFO Batch</label>
+                <select className="input-field" value={transactionForm.batch_id} onChange={e => setTransactionForm({...transactionForm, batch_id: parseInt(e.target.value)})}>
+                  {batchesList.map(b => (
+                    <option key={b.id} value={b.id}>{b.batch_number} - {b.brand_name} (Curr Stock: {b.current_quantity} {b.unit || 'pcs'} • Exp: {b.exp_date})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Movement Type</label>
+                  <select className="input-field" value={transactionForm.transaction_type} onChange={e => setTransactionForm({...transactionForm, transaction_type: e.target.value})}>
+                    <option value="RESTOCK">RESTOCK (+ Stock Intake)</option>
+                    <option value="DISPENSE">DISPENSE (- Clinical Dispense)</option>
+                    <option value="ADJUSTMENT">ADJUSTMENT (= Audit Set Stock)</option>
+                    <option value="RETURN">RETURN (+ Returned to Inventory)</option>
+                    <option value="EXPIRED_DISCARD">EXPIRED_DISCARD (- Damaged/Expired)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Quantity to Move</label>
+                  <input type="number" min="1" className="input-field" required value={transactionForm.quantity} onChange={e => setTransactionForm({...transactionForm, quantity: parseInt(e.target.value) || 0})} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Movement Audit Notes</label>
+                <textarea className="input-field" rows={3} value={transactionForm.notes} onChange={e => setTransactionForm({...transactionForm, notes: e.target.value})} placeholder="Reason for inventory movement, invoice ref, or ward order..." />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowRecordTransactionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Log Transaction & Update Stock</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT STOCK BATCH MODAL */}
+      {showEditBatchModal && selectedBatch && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditBatchModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Stock Batch {selectedBatch.batch_number}</h3>
+            <form onSubmit={handleUpdateBatch} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Current Stock Qty</label>
+                  <input type="number" className="input-field" value={selectedBatch.current_quantity} onChange={e => setSelectedBatch({...selectedBatch, current_quantity: parseInt(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Batch Status</label>
+                  <select className="input-field" value={selectedBatch.status} onChange={e => setSelectedBatch({...selectedBatch, status: e.target.value})}>
+                    <option value="available">Available</option>
+                    <option value="low">Low Stock</option>
+                    <option value="expired">Expired</option>
+                    <option value="recalled">Recalled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Expiry Date (FEFO)</label>
+                  <input type="date" className="input-field" value={selectedBatch.exp_date} onChange={e => setSelectedBatch({...selectedBatch, exp_date: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Storage Location</label>
+                  <input type="text" className="input-field" value={selectedBatch.storage_location || ''} onChange={e => setSelectedBatch({...selectedBatch, storage_location: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditBatchModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Batch</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE STOCK BATCH MODAL */}
+      {showDeleteBatchModal && selectedBatch && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
             <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Supplier Deletion</h3>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Batch Deletion</h3>
             <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-              Are you sure you want to delete pharmaceutical supplier <strong>{selectedSupplier.company_name}</strong> ({selectedSupplier.supplier_code}) from the system?
+              Are you sure you want to delete stock batch <strong>{selectedBatch.batch_number}</strong> for <strong>{selectedBatch.brand_name}</strong>?
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button onClick={() => setShowDeleteSupplierModal(false)} className="btn btn-secondary">Cancel</button>
-              <button onClick={handleDeleteSupplier} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Supplier</button>
+              <button onClick={() => setShowDeleteBatchModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteBatch} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Stock Batch</button>
             </div>
           </div>
         </div>
@@ -3595,3 +4798,4 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     </div>
   );
 }
+

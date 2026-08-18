@@ -1277,6 +1277,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     (c.description && c.description.toLowerCase().includes(categorySearch.toLowerCase()))
   );
 
+  const filteredSuppliers = suppliersList.filter(s => 
+    s.company_name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
+    s.supplier_code.toLowerCase().includes(supplierSearch.toLowerCase()) ||
+    (s.contact_person && s.contact_person.toLowerCase().includes(supplierSearch.toLowerCase()))
+  );
+
+
   const filteredBatches = batchesList.filter(b => {
     const matchesSearch = 
       b.batch_number.toLowerCase().includes(batchSearch.toLowerCase()) ||

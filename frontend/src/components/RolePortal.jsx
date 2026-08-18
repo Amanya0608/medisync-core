@@ -13,6 +13,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const location = useLocation();
 
   const getTabFromPath = (pathname) => {
+    if (pathname.includes('/dashboard/overview')) return 'dashboard';
     if (pathname.includes('/dashboard/users')) return 'users';
     if (pathname.includes('/dashboard/departments')) return 'departments';
     if (pathname.includes('/dashboard/staff')) return 'staff';
@@ -26,9 +27,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     if (pathname.includes('/dashboard/appointments')) return 'appointments';
     if (pathname.includes('/dashboard/prescriptions')) return 'prescriptions';
     if (pathname.includes('/dashboard/permissions')) return 'permissions';
-    if (pathname.includes('/dashboard/schema')) return 'schema';
-    return user.roleKey === 'super_admin' ? 'users' : 'dashboard';
+    return 'dashboard';
   };
+
 
 
   const [activeTab, setActiveTab] = useState(getTabFromPath(location.pathname));
@@ -262,10 +263,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     else if (tabId === 'appointments') path = '/dashboard/appointments';
     else if (tabId === 'prescriptions') path = '/dashboard/prescriptions';
     else if (tabId === 'permissions') path = '/dashboard/permissions';
-    else if (tabId === 'schema') path = '/dashboard/schema';
+    else if (tabId === 'dashboard') path = '/dashboard/overview';
     
     navigate(path);
   };
+
 
   const fetchAllData = async () => {
     setBackendStatus(prev => ({ ...prev, loading: true }));
@@ -561,6 +563,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     const items = [];
 
     if (roleKey === 'super_admin') {
+      items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'users', label: 'User Management', icon: UserCheck });
       items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
       items.push({ id: 'prescriptions', label: 'Prescriptions (Rx)', icon: FileText });
@@ -571,13 +574,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
       items.push({ id: 'patients', label: 'Patient Records (EHR)', icon: Users });
       items.push({ id: 'suppliers', label: 'Suppliers Directory', icon: Building2 });
-      items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
       items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
       items.push({ id: 'permissions', label: 'Permissions & Access Matrix', icon: Key });
-      items.push({ id: 'schema', label: 'Database Architecture', icon: Database });
-
     } else {
+
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
       items.push({ id: 'prescriptions', label: 'Prescriptions (Rx)', icon: FileText });

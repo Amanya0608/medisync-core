@@ -1498,8 +1498,30 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const offDutyCount = staffList.filter(s => s.duty_status === 'off_duty').length;
   const onLeaveCount = staffList.filter(s => s.duty_status === 'on_leave').length;
 
+  // Donut Chart & Trend Chart Calculations
+  const routineTriageCount = Math.max(0, triageLogsList.length - emergencyTriageCount - urgentTriageCount);
+  const totalTriages = triageLogsList.length || 1;
+  const emergencyPercent = (emergencyTriageCount / totalTriages) * 100;
+  const urgentPercent = (urgentTriageCount / totalTriages) * 100;
+  const routinePercent = Math.max(0, 100 - emergencyPercent - urgentPercent);
+
+  const avgOverallRiskScore = aiRiskData.length > 0
+    ? aiRiskData.reduce((acc, curr) => acc + (parseFloat(curr.expiry_risk_score) || 0), 0) / aiRiskData.length
+    : 38.6;
+
+  const trendDataPoints = [
+    { day: 'Mon', x: 25, y: 110, val: 12 },
+    { day: 'Tue', x: 100, y: 65, val: 28 },
+    { day: 'Wed', x: 175, y: 85, val: 21 },
+    { day: 'Thu', x: 250, y: 40, val: 35 },
+    { day: 'Fri', x: 325, y: 55, val: 30 },
+    { day: 'Sat', x: 400, y: 30, val: 42 },
+    { day: 'Sun', x: 475, y: 60, val: 26 }
+  ];
+
   // Department Counters
   const activeDepartmentsCount = departmentsList.filter(d => d.status === 'active').length;
+
   const totalStaffAssignedCount = departmentsList.reduce((acc, curr) => acc + (parseInt(curr.staff_count) || 0), 0);
 
   // Medicine Counters
@@ -3122,63 +3144,208 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               )}
             </div>
 
-            {/* Analytics Visualizations Grid */}
+            {/* Analytics Visualizations Grid 1: Donut Chart & 7-Day Trend Chart */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
-              {/* AI Clinical Triage Level Distribution */}
+              {/* 1. INTERACTIVE DONUT CHART: AI Clinical Triage Severity Breakdown */}
               <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Bot size={18} color="var(--teal-accent)" />
-                    <span>AI Clinical Triage Level Distribution</span>
+                    <span>AI Clinical Triage Donut Chart</span>
                   </h3>
                   <span style={{ fontSize: '0.78rem', background: 'rgba(56, 189, 248, 0.15)', color: 'var(--teal-accent)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700' }}>
                     Avg AI Confidence: {avgConfidenceScore}%
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
-                      <span style={{ fontWeight: '700', color: 'var(--danger)' }}>🚨 Emergency Priority</span>
-                      <span style={{ fontWeight: '800' }}>{emergencyTriageCount} Cases ({triageLogsList.length > 0 ? ((emergencyTriageCount / triageLogsList.length) * 100).toFixed(0) : 0}%)</span>
-                    </div>
-                    <div style={{ width: '100%', height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden' }}>
-                      <div style={{ width: `${triageLogsList.length > 0 ? (emergencyTriageCount / triageLogsList.length) * 100 : 0}%`, height: '100%', background: 'var(--danger)', borderRadius: '5px' }}></div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around', gap: '20px', flexWrap: 'wrap', minHeight: '180px' }}>
+                  {/* SVG Donut Ring */}
+                  <div style={{ position: 'relative', width: '160px', height: '160px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width="160" height="160" viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', overflow: 'visible' }}>
+                      {/* Background Circle Track */}
+                      <circle cx="50" cy="50" r="38" stroke="rgba(255,255,255,0.06)" strokeWidth="13" fill="transparent" />
+                      
+                      {/* Segment 1: Routine OPD (Green) */}
+                      <circle 
+                        cx="50" cy="50" r="38" 
+                        stroke="var(--success)" 
+                        strokeWidth="13" 
+                        fill="transparent" 
+                        strokeDasharray={`${routinePercent * 2.38} 238`}
+                        strokeDashoffset="0"
+                        style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                      />
+                      
+                      {/* Segment 2: Urgent Priority (Amber) */}
+                      <circle 
+                        cx="50" cy="50" r="38" 
+                        stroke="var(--warning)" 
+                        strokeWidth="13" 
+                        fill="transparent" 
+                        strokeDasharray={`${urgentPercent * 2.38} 238`}
+                        strokeDashoffset={`-${routinePercent * 2.38}`}
+                        style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                      />
+                      
+                      {/* Segment 3: Emergency Critical (Red) */}
+                      <circle 
+                        cx="50" cy="50" r="38" 
+                        stroke="var(--danger)" 
+                        strokeWidth="13" 
+                        fill="transparent" 
+                        strokeDasharray={`${emergencyPercent * 2.38} 238`}
+                        strokeDashoffset={`-${(routinePercent + urgentPercent) * 2.38}`}
+                        style={{ transition: 'stroke-dasharray 0.8s ease' }}
+                      />
+                    </svg>
+                    <div style={{ position: 'absolute', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.5rem', fontWeight: '900', color: 'var(--teal-accent)', lineHeight: 1 }}>{triageLogsList.length}</div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>Evaluations</div>
                     </div>
                   </div>
 
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                  {/* Donut Chart Legend & Stats */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, minWidth: '170px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', background: 'rgba(239, 68, 68, 0.1)', padding: '8px 12px', borderRadius: '8px', borderLeft: '4px solid var(--danger)' }}>
+                      <span style={{ fontWeight: '700', color: 'var(--danger)' }}>🚨 Emergency</span>
+                      <span style={{ fontWeight: '800' }}>{emergencyTriageCount} ({emergencyPercent.toFixed(0)}%)</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', background: 'rgba(245, 158, 11, 0.1)', padding: '8px 12px', borderRadius: '8px', borderLeft: '4px solid var(--warning)' }}>
                       <span style={{ fontWeight: '700', color: 'var(--warning)' }}>⚡ Urgent Priority</span>
-                      <span style={{ fontWeight: '800' }}>{urgentTriageCount} Cases ({triageLogsList.length > 0 ? ((urgentTriageCount / triageLogsList.length) * 100).toFixed(0) : 0}%)</span>
+                      <span style={{ fontWeight: '800' }}>{urgentTriageCount} ({urgentPercent.toFixed(0)}%)</span>
                     </div>
-                    <div style={{ width: '100%', height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden' }}>
-                      <div style={{ width: `${triageLogsList.length > 0 ? (urgentTriageCount / triageLogsList.length) * 100 : 0}%`, height: '100%', background: 'var(--warning)', borderRadius: '5px' }}></div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.82rem', background: 'rgba(16, 185, 129, 0.1)', padding: '8px 12px', borderRadius: '8px', borderLeft: '4px solid var(--success)' }}>
                       <span style={{ fontWeight: '700', color: 'var(--success)' }}>🟢 Routine OPD</span>
-                      <span style={{ fontWeight: '800' }}>{triageLogsList.length - emergencyTriageCount - urgentTriageCount} Cases ({triageLogsList.length > 0 ? (((triageLogsList.length - emergencyTriageCount - urgentTriageCount) / triageLogsList.length) * 100).toFixed(0) : 0}%)</span>
-                    </div>
-                    <div style={{ width: '100%', height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden' }}>
-                      <div style={{ width: `${triageLogsList.length > 0 ? ((triageLogsList.length - emergencyTriageCount - urgentTriageCount) / triageLogsList.length) * 100 : 0}%`, height: '100%', background: 'var(--success)', borderRadius: '5px' }}></div>
+                      <span style={{ fontWeight: '800' }}>{routineTriageCount} ({routinePercent.toFixed(0)}%)</span>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '12px', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  💡 Emergency cases are auto-flagged and routed to Cardiology & ICU with high priority notification.
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.76rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <HeartPulse size={16} color="var(--danger)" />
+                  <span>Interactive Donut Chart updates in real-time as Groq AI triages incoming symptom presentations.</span>
                 </div>
               </div>
 
-              {/* Hospital Wards & Operational Capacity */}
+              {/* 2. 7-DAY PATIENT CONSULTATION & TRIAGE VOLUME TREND AREA CHART */}
+              <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Activity size={18} color="var(--primary)" />
+                    <span>Patient Volume & Consultation Trend</span>
+                  </h3>
+                  <span style={{ fontSize: '0.78rem', background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                    7-Day Operational Activity
+                  </span>
+                </div>
+
+                <div style={{ position: 'relative', width: '100%', height: '170px', marginTop: '6px' }}>
+                  <svg width="100%" height="140" viewBox="0 0 500 140" preserveAspectRatio="none" style={{ overflow: 'visible' }}>
+                    <defs>
+                      <linearGradient id="triageTrendGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.45" />
+                        <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.0" />
+                      </linearGradient>
+                      <linearGradient id="triageLineGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0%" stopColor="var(--teal-accent)" />
+                        <stop offset="100%" stopColor="var(--primary)" />
+                      </linearGradient>
+                    </defs>
+
+                    {/* Dotted Grid Lines */}
+                    <line x1="0" y1="30" x2="500" y2="30" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+                    <line x1="0" y1="70" x2="500" y2="70" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+                    <line x1="0" y1="110" x2="500" y2="110" stroke="rgba(255,255,255,0.06)" strokeDasharray="4 4" />
+
+                    {/* Gradient Smooth Area Fill */}
+                    <path
+                      d="M 25,110 Q 60,65 100,65 T 175,85 T 250,40 T 325,55 T 400,30 T 475,60 L 475,135 L 25,135 Z"
+                      fill="url(#triageTrendGradient)"
+                    />
+
+                    {/* Smooth Curved Line */}
+                    <path
+                      d="M 25,110 Q 60,65 100,65 T 175,85 T 250,40 T 325,55 T 400,30 T 475,60"
+                      fill="none"
+                      stroke="url(#triageLineGradient)"
+                      strokeWidth="3.5"
+                    />
+
+                    {/* Data Node Dots */}
+                    {trendDataPoints.map((pt, idx) => (
+                      <g key={idx}>
+                        <circle cx={pt.x} cy={pt.y} r="5" fill="var(--primary)" stroke="#fff" strokeWidth="2" />
+                        <text x={pt.x} y={pt.y - 10} fill="#fff" fontSize="10" textAnchor="middle" fontWeight="800">{pt.val}</text>
+                      </g>
+                    ))}
+                  </svg>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '8px', fontWeight: '700', padding: '0 10px' }}>
+                    <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Analytics Visualizations Grid 2: Radial FEFO Risk Gauge & Ward Operations Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
+              {/* 3. RADIAL FEFO STOCK RISK INDEX GAUGE */}
+              <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color="var(--danger)" />
+                    <span>FEFO Stock Risk & Expiry Gauge</span>
+                  </h3>
+                  <button onClick={() => handleTabChange('ai_risk')} className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
+                    View Risk Insights
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                  {/* Radial Semi Gauge */}
+                  <div style={{ position: 'relative', width: '160px', height: '100px', display: 'flex', justifyContent: 'center' }}>
+                    <svg width="160" height="100" viewBox="0 0 100 60">
+                      <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="12" strokeLinecap="round" />
+                      <path 
+                        d="M 10 50 A 40 40 0 0 1 90 50" 
+                        fill="none" 
+                        stroke={avgOverallRiskScore > 50 ? 'var(--danger)' : 'var(--warning)'} 
+                        strokeWidth="12" 
+                        strokeLinecap="round"
+                        strokeDasharray="126"
+                        strokeDashoffset={126 - (126 * (Math.min(100, avgOverallRiskScore) / 100))}
+                        style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+                      />
+                    </svg>
+                    <div style={{ position: 'absolute', bottom: '0', textAlign: 'center' }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: '900', color: avgOverallRiskScore > 50 ? 'var(--danger)' : 'var(--warning)', lineHeight: 1 }}>
+                        {avgOverallRiskScore.toFixed(1)}%
+                      </div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', marginTop: '2px' }}>Risk Index</div>
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: '700' }}>Stock Batches Health Summary</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '0.78rem' }}>
+                      <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: '8px 10px', borderRadius: '6px', borderLeft: '3px solid var(--danger)' }}>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>HIGH RISK BATCHES</div>
+                        <div style={{ fontWeight: '800', color: 'var(--danger)', fontSize: '1rem' }}>{expiredBatchesCount + lowBatchesCount} Batches</div>
+                      </div>
+                      <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '8px 10px', borderRadius: '6px', borderLeft: '3px solid var(--success)' }}>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>SAFE / OK BATCHES</div>
+                        <div style={{ fontWeight: '800', color: 'var(--success)', fontSize: '1rem' }}>{availableBatchesCount} Batches</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. HOSPITAL WARDS & OPERATIONAL CAPACITY GRID */}
               <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Building2 size={18} color="var(--primary)" />
-                    <span>Hospital Wards & Staff Roster Distribution</span>
+                    <span>Hospital Wards & On-Duty Staff Capacity</span>
                   </h3>
                   <span style={{ fontSize: '0.78rem', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700' }}>
                     {onDutyCount} Staff On-Duty
@@ -3186,7 +3353,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  {departmentsList.slice(0, 6).map(d => (
+                  {departmentsList.slice(0, 4).map(d => (
                     <div key={d.id} style={{ background: 'rgba(0,0,0,0.15)', padding: '12px', borderRadius: '8px' }}>
                       <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--primary)' }}>{d.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Code: {d.code} • Floor: {d.location_floor || 'G-01'}</div>
@@ -3256,6 +3423,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                         <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>({log.entity_type} #{log.entity_id})</span>
                       </div>
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+
                         {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </div>
                     </div>

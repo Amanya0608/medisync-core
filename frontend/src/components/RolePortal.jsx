@@ -25,9 +25,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     if (pathname.includes('/dashboard/patients')) return 'patients';
     if (pathname.includes('/dashboard/appointments')) return 'appointments';
     if (pathname.includes('/dashboard/prescriptions')) return 'prescriptions';
+    if (pathname.includes('/dashboard/permissions')) return 'permissions';
     if (pathname.includes('/dashboard/schema')) return 'schema';
     return user.roleKey === 'super_admin' ? 'users' : 'dashboard';
   };
+
 
   const [activeTab, setActiveTab] = useState(getTabFromPath(location.pathname));
   
@@ -56,6 +58,19 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [aiRiskSearch, setAiRiskSearch] = useState('');
   const [aiRiskFilter, setAiRiskFilter] = useState('all');
   const [isGeneratingAiRisk, setIsGeneratingAiRisk] = useState(false);
+
+  // Permissions & Access Control State
+  const [permissionsList, setPermissionsList] = useState([]);
+  const [rolePermissionsMatrix, setRolePermissionsMatrix] = useState({ roles: [], permissions: [], matrix: {} });
+  const [permissionSubTab, setPermissionSubTab] = useState('matrix'); // 'matrix' or 'directory'
+  const [permissionSearch, setPermissionSearch] = useState('');
+  const [permissionModuleFilter, setPermissionModuleFilter] = useState('all');
+  const [showCreatePermissionModal, setShowCreatePermissionModal] = useState(false);
+  const [showEditPermissionModal, setShowEditPermissionModal] = useState(false);
+  const [showDeletePermissionModal, setShowDeletePermissionModal] = useState(false);
+  const [selectedPermission, setSelectedPermission] = useState(null);
+  const [permissionForm, setPermissionForm] = useState({ name: '', display_name: '', module: 'general' });
+
 
 
 
@@ -229,6 +244,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   }, [location.pathname]);
 
   const handleTabChange = (tabId) => {
+
     setActiveTab(tabId);
     let path = '/dashboard/overview';
     if (tabId === 'users') path = '/dashboard/users';
@@ -243,6 +259,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     else if (tabId === 'patients') path = '/dashboard/patients';
     else if (tabId === 'appointments') path = '/dashboard/appointments';
     else if (tabId === 'prescriptions') path = '/dashboard/prescriptions';
+    else if (tabId === 'permissions') path = '/dashboard/permissions';
     else if (tabId === 'schema') path = '/dashboard/schema';
     
     navigate(path);
@@ -264,6 +281,8 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchBatchesData();
       fetchTransactionsData();
       fetchAiRiskData();
+      fetchPermissionsData();
+      fetchRolePermissionsMatrix();
 
       fetchStaffData();
       fetchSuppliersData();
@@ -333,6 +352,96 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       console.error(err);
     }
   };
+
+  // Permissions & Access Control Handlers
+  const fetchPermissionsData = async () => {
+    try {
+      const res = await fetch('/api/v1/admin/permissions');
+      if (res.ok) setPermissionsList(await res.json());
+    } catch (err) {
+      console.error('Permissions fetch error:', err);
+    }
+  };
+
+  const fetchRolePermissionsMatrix = async () => {
+    try {
+      const res = await fetch('/api/v1/admin/role-permissions-matrix');
+      if (res.ok) setRolePermissionsMatrix(await res.json());
+    } catch (err) {
+      console.error('Permissions matrix fetch error:', err);
+    }
+  };
+
+  const handleCreatePermission = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/admin/permissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(permissionForm)
+      });
+      if (res.ok) {
+        setShowCreatePermissionModal(false);
+        setPermissionForm({ name: '', display_name: '', module: 'general' });
+        fetchPermissionsData();
+        fetchRolePermissionsMatrix();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdatePermission = async (e) => {
+    e.preventDefault();
+    if (!selectedPermission) return;
+    try {
+      const res = await fetch(`/api/v1/admin/permissions/${selectedPermission.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedPermission)
+      });
+      if (res.ok) {
+        setShowEditPermissionModal(false);
+        setSelectedPermission(null);
+        fetchPermissionsData();
+        fetchRolePermissionsMatrix();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeletePermission = async () => {
+    if (!selectedPermission) return;
+    try {
+      const res = await fetch(`/api/v1/admin/permissions/${selectedPermission.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeletePermissionModal(false);
+        setSelectedPermission(null);
+        fetchPermissionsData();
+        fetchRolePermissionsMatrix();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleToggleRolePermission = async (roleId, permissionId) => {
+    try {
+      const res = await fetch('/api/v1/admin/role-permissions/toggle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ role_id: roleId, permission_id: permissionId })
+      });
+      if (res.ok) {
+        fetchRolePermissionsMatrix();
+        fetchPermissionsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
 
 
 
@@ -451,7 +560,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
       items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
+      items.push({ id: 'permissions', label: 'Permissions & Access Matrix', icon: Key });
       items.push({ id: 'schema', label: 'Database Architecture', icon: Database });
+
     } else {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
@@ -1282,6 +1393,19 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     s.supplier_code.toLowerCase().includes(supplierSearch.toLowerCase()) ||
     (s.contact_person && s.contact_person.toLowerCase().includes(supplierSearch.toLowerCase()))
   );
+
+  const filteredPermissions = permissionsList.filter(p => {
+    const matchesSearch = 
+      p.name.toLowerCase().includes(permissionSearch.toLowerCase()) ||
+      p.display_name.toLowerCase().includes(permissionSearch.toLowerCase()) ||
+      p.module.toLowerCase().includes(permissionSearch.toLowerCase());
+
+    if (permissionModuleFilter === 'all') return matchesSearch;
+    return matchesSearch && p.module === permissionModuleFilter;
+  });
+
+  const uniquePermissionModules = Array.from(new Set(permissionsList.map(p => p.module)));
+
 
 
   const filteredBatches = batchesList.filter(b => {
@@ -3381,8 +3505,264 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         )}
 
 
+        {/* TAB: PERMISSIONS & ROLE-PERMISSION MATRIX CRUD */}
+        {activeTab === 'permissions' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL PERMISSIONS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{permissionsList.length} Defined</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>SYSTEM MODULES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{uniquePermissionModules.length} Modules</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CONFIGURED ROLES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{rolePermissionsMatrix.roles?.length || 0} Roles</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>SECURITY AUDIT STATUS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <ShieldCheck size={20} />
+                  <span>Enforced</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                <button
+                  onClick={() => setPermissionSubTab('matrix')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: permissionSubTab === 'matrix' ? 'var(--primary)' : 'transparent',
+                    color: permissionSubTab === 'matrix' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <ShieldCheck size={16} />
+                  <span>Role Access Control Matrix Grid</span>
+                </button>
+                <button
+                  onClick={() => setPermissionSubTab('directory')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: permissionSubTab === 'directory' ? 'var(--primary)' : 'transparent',
+                    color: permissionSubTab === 'directory' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Key size={16} />
+                  <span>Permissions Registry Directory ({permissionsList.length})</span>
+                </button>
+              </div>
+
+              <button onClick={() => setShowCreatePermissionModal(true)} className="btn btn-primary">
+                <Plus size={18} />
+                <span>Add New Permission</span>
+              </button>
+            </div>
+
+            {permissionSubTab === 'matrix' && (
+              <div className="glass-panel" style={{ overflowX: 'auto', padding: '20px' }}>
+                <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Key size={20} color="var(--primary)" />
+                      <span>Role-Permission Access Control Matrix</span>
+                    </h3>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                      Click any toggle switch to dynamically grant or revoke permissions for each system role in real-time.
+                    </p>
+                  </div>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                      <th style={{ padding: '14px', minWidth: '220px' }}>SYSTEM PERMISSION</th>
+                      <th style={{ padding: '14px' }}>MODULE</th>
+                      {(rolePermissionsMatrix.roles || []).map(r => (
+                        <th key={r.id} style={{ padding: '14px', textAlign: 'center', minWidth: '130px' }}>
+                          <div style={{ fontWeight: '800', color: 'var(--primary)' }}>{r.display_name}</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.name}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {permissionsList.map(p => (
+                      <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '700' }}>{p.display_name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{p.name}</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.75rem', textTransform: 'uppercase' }}>
+                            {p.module}
+                          </span>
+                        </td>
+                        {(rolePermissionsMatrix.roles || []).map(r => {
+                          const isGranted = (rolePermissionsMatrix.matrix[r.id] || []).includes(p.id);
+
+                          return (
+                            <td key={r.id} style={{ padding: '14px', textAlign: 'center' }}>
+                              <button
+                                onClick={() => handleToggleRolePermission(r.id, p.id)}
+                                className="btn"
+                                style={{
+                                  padding: '6px 14px',
+                                  fontSize: '0.78rem',
+                                  fontWeight: '800',
+                                  borderRadius: '20px',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  background: isGranted ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.15)',
+                                  color: isGranted ? 'var(--success)' : 'var(--danger)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '6px'
+                                }}
+                              >
+                                {isGranted ? <CheckCircle2 size={14} /> : <X size={14} />}
+                                <span>{isGranted ? 'GRANTED' : 'DENIED'}</span>
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {permissionSubTab === 'directory' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Search permissions by key, display label, or module..." 
+                      value={permissionSearch}
+                      onChange={e => setPermissionSearch(e.target.value)}
+                      style={{ paddingLeft: '42px' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                    <button
+                      onClick={() => setPermissionModuleFilter('all')}
+                      className="btn"
+                      style={{
+                        padding: '6px 12px',
+                        fontSize: '0.78rem',
+                        background: permissionModuleFilter === 'all' ? 'var(--primary)' : 'transparent',
+                        color: permissionModuleFilter === 'all' ? '#fff' : 'var(--text-muted)',
+                        border: 'none',
+                        borderRadius: '6px'
+                      }}
+                    >
+                      All Modules
+                    </button>
+                    {uniquePermissionModules.map(mod => (
+                      <button
+                        key={mod}
+                        onClick={() => setPermissionModuleFilter(mod)}
+                        className="btn"
+                        style={{
+                          padding: '6px 12px',
+                          fontSize: '0.78rem',
+                          background: permissionModuleFilter === mod ? 'var(--primary)' : 'transparent',
+                          color: permissionModuleFilter === mod ? '#fff' : 'var(--text-muted)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          textTransform: 'capitalize'
+                        }}
+                      >
+                        {mod}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px' }}>ID</th>
+                        <th style={{ padding: '14px' }}>PERMISSION KEY</th>
+                        <th style={{ padding: '14px' }}>DISPLAY LABEL</th>
+                        <th style={{ padding: '14px' }}>MODULE</th>
+                        <th style={{ padding: '14px' }}>ASSIGNED ROLES</th>
+                        <th style={{ padding: '14px' }}>ACTIONS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredPermissions.map(p => (
+                        <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700' }}>#{p.id}</td>
+                          <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '800', color: 'var(--primary)' }}>
+                            {p.name}
+                          </td>
+                          <td style={{ padding: '14px', fontWeight: '700' }}>{p.display_name}</td>
+                          <td style={{ padding: '14px' }}>
+                            <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--teal-accent)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem', textTransform: 'uppercase' }}>
+                              {p.module}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                              {(p.roles || []).map(r => (
+                                <span key={r.id} style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.72rem', fontWeight: '700' }}>
+                                  {r.display_name}
+                                </span>
+                              ))}
+                              {(!p.roles || p.roles.length === 0) && (
+                                <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>No roles assigned</span>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px' }}>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button 
+                                onClick={() => { setSelectedPermission(p); setShowEditPermissionModal(true); }}
+                                className="btn btn-secondary" 
+                                style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                              >
+                                <Edit size={13} />
+                              </button>
+                              <button 
+                                onClick={() => { setSelectedPermission(p); setShowDeletePermissionModal(true); }}
+                                className="btn btn-secondary" 
+                                style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Database Architecture Tab */}
         {activeTab === 'schema' && (
+
           <div className="glass-panel" style={{ padding: '24px' }}>
             <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px' }}>Enterprise Database Architecture</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Connected to Healthcare Relational Database Engine</p>
@@ -4986,18 +5366,93 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         </div>
       )}
 
-      {/* DELETE STOCK BATCH MODAL */}
-      {showDeleteBatchModal && selectedBatch && (
+      {/* CREATE PERMISSION MODAL */}
+      {showCreatePermissionModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreatePermissionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Register New System Permission</h3>
+            <form onSubmit={handleCreatePermission} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Permission Key (Name)</label>
+                <input type="text" className="input-field" required value={permissionForm.name} onChange={e => setPermissionForm({...permissionForm, name: e.target.value})} placeholder="patients.export, reports.view" />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Display Label</label>
+                <input type="text" className="input-field" required value={permissionForm.display_name} onChange={e => setPermissionForm({...permissionForm, display_name: e.target.value})} placeholder="Export Patient EHR Data to PDF" />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>System Module Tag</label>
+                <select className="input-field" value={permissionForm.module} onChange={e => setPermissionForm({...permissionForm, module: e.target.value})}>
+                  <option value="security">Security & Access Control</option>
+                  <option value="patients">Patient Records (EHR)</option>
+                  <option value="clinical">Clinical & Prescriptions</option>
+                  <option value="inventory">Inventory & FEFO Batches</option>
+                  <option value="ai">AI Engine & Triage</option>
+                  <option value="general">General Administration</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreatePermissionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Create System Permission</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PERMISSION MODAL */}
+      {showEditPermissionModal && selectedPermission && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditPermissionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Permission #{selectedPermission.id}</h3>
+            <form onSubmit={handleUpdatePermission} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Permission Key</label>
+                <input type="text" className="input-field" value={selectedPermission.name} onChange={e => setSelectedPermission({...selectedPermission, name: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Display Label</label>
+                <input type="text" className="input-field" value={selectedPermission.display_name} onChange={e => setSelectedPermission({...selectedPermission, display_name: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>System Module</label>
+                <input type="text" className="input-field" value={selectedPermission.module} onChange={e => setSelectedPermission({...selectedPermission, module: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditPermissionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Permission</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE PERMISSION MODAL */}
+      {showDeletePermissionModal && selectedPermission && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
             <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Batch Deletion</h3>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Permission Deletion</h3>
             <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-              Are you sure you want to delete stock batch <strong>{selectedBatch.batch_number}</strong> for <strong>{selectedBatch.brand_name}</strong>?
+              Are you sure you want to delete permission <strong>{selectedPermission.display_name}</strong> (<code>{selectedPermission.name}</code>)?
             </p>
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button onClick={() => setShowDeleteBatchModal(false)} className="btn btn-secondary">Cancel</button>
-              <button onClick={handleDeleteBatch} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Stock Batch</button>
+              <button onClick={() => setShowDeletePermissionModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeletePermission} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Permission</button>
             </div>
           </div>
         </div>
@@ -5005,4 +5460,5 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     </div>
   );
 }
+
 

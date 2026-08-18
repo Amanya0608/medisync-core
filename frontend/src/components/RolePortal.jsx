@@ -14,6 +14,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
   const getTabFromPath = (pathname) => {
     if (pathname.includes('/dashboard/users')) return 'users';
+    if (pathname.includes('/dashboard/departments')) return 'departments';
     if (pathname.includes('/dashboard/staff')) return 'staff';
     if (pathname.includes('/dashboard/medicines')) return 'medicines';
     if (pathname.includes('/dashboard/categories')) return 'categories';
@@ -42,6 +43,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [rolesList, setRolesList] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
   const [userSearch, setUserSearch] = useState('');
+
+  // Department CRUD State
+  const [departmentSearch, setDepartmentSearch] = useState('');
+  const [showCreateDepartmentModal, setShowCreateDepartmentModal] = useState(false);
+  const [showEditDepartmentModal, setShowEditDepartmentModal] = useState(false);
+  const [showDeleteDepartmentModal, setShowDeleteDepartmentModal] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
 
   // Staff Roster CRUD State
   const [staffList, setStaffList] = useState([]);
@@ -101,6 +109,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     department_id: 1, phone: '+94 77 123 4567', status: 'active', specialization: 'General Care'
   });
 
+  // Department Creation Form State
+  const [departmentForm, setDepartmentForm] = useState({
+    name: '', code: '', description: '', location_floor: 'Ground Floor - Wing A', status: 'active'
+  });
+
   // Staff Creation Form State
   const [staffForm, setStaffForm] = useState({
     first_name: '', last_name: '', email: '', password: 'password123',
@@ -147,6 +160,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setActiveTab(tabId);
     let path = '/dashboard/overview';
     if (tabId === 'users') path = '/dashboard/users';
+    else if (tabId === 'departments') path = '/dashboard/departments';
     else if (tabId === 'staff') path = '/dashboard/staff';
     else if (tabId === 'medicines') path = '/dashboard/medicines';
     else if (tabId === 'categories') path = '/dashboard/categories';
@@ -169,6 +183,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchPatientsData();
       fetchCategoriesData();
       fetchMedicinesData();
+      fetchDepartmentsData();
 
       const batchesRes = await fetch('/api/v1/batches');
       if (batchesRes.ok) setBatches(await batchesRes.json());
@@ -191,6 +206,15 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } catch (err) {
       console.error('API Fetch error:', err);
       setBackendStatus({ loading: false, online: false, data: null });
+    }
+  };
+
+  const fetchDepartmentsData = async () => {
+    try {
+      const res = await fetch('/api/v1/admin/departments');
+      if (res.ok) setDepartmentsList(await res.json());
+    } catch (err) {
+      console.error('Departments fetch error:', err);
     }
   };
 
@@ -228,9 +252,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
       const rolesRes = await fetch('/api/v1/admin/roles');
       if (rolesRes.ok) setRolesList(await rolesRes.json());
-
-      const deptsRes = await fetch('/api/v1/admin/departments');
-      if (deptsRes.ok) setDepartmentsList(await deptsRes.json());
     } catch (err) {
       console.error('Admin fetch error:', err);
     }
@@ -264,6 +285,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
     if (roleKey === 'super_admin') {
       items.push({ id: 'users', label: 'User Management', icon: UserCheck });
+      items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
       items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
@@ -276,6 +298,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       items.push({ id: 'schema', label: 'Database Architecture', icon: Database });
     } else {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
+      items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
       items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
       items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
@@ -295,6 +318,58 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   };
 
   const navItems = getNavItems();
+
+  // Department Handlers
+  const handleCreateDepartment = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/admin/departments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(departmentForm)
+      });
+      if (res.ok) {
+        setShowCreateDepartmentModal(false);
+        setDepartmentForm({ name: '', code: '', description: '', location_floor: 'Ground Floor - Wing A', status: 'active' });
+        fetchDepartmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateDepartment = async (e) => {
+    e.preventDefault();
+    if (!selectedDepartment) return;
+    try {
+      const res = await fetch(`/api/v1/admin/departments/${selectedDepartment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedDepartment)
+      });
+      if (res.ok) {
+        setShowEditDepartmentModal(false);
+        setSelectedDepartment(null);
+        fetchDepartmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteDepartment = async () => {
+    if (!selectedDepartment) return;
+    try {
+      const res = await fetch(`/api/v1/admin/departments/${selectedDepartment.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteDepartmentModal(false);
+        setSelectedDepartment(null);
+        fetchDepartmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // User Handlers
   const handleCreateUser = async (e) => {
@@ -373,6 +448,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         });
         fetchStaffData();
         fetchAdminUsersData();
+        fetchDepartmentsData();
       }
     } catch (err) {
       console.error(err);
@@ -393,6 +469,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         setSelectedStaff(null);
         fetchStaffData();
         fetchAdminUsersData();
+        fetchDepartmentsData();
       }
     } catch (err) {
       console.error(err);
@@ -408,6 +485,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         setSelectedStaff(null);
         fetchStaffData();
         fetchAdminUsersData();
+        fetchDepartmentsData();
       }
     } catch (err) {
       console.error(err);
@@ -690,6 +768,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     (u.role_name && u.role_name.toLowerCase().includes(userSearch.toLowerCase()))
   );
 
+  const filteredDepartments = departmentsList.filter(d => 
+    d.name.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+    d.code.toLowerCase().includes(departmentSearch.toLowerCase()) ||
+    (d.description && d.description.toLowerCase().includes(departmentSearch.toLowerCase())) ||
+    (d.location_floor && d.location_floor.toLowerCase().includes(departmentSearch.toLowerCase()))
+  );
+
   const filteredStaff = staffList.filter(s => {
     const matchesSearch = 
       `${s.first_name} ${s.last_name}`.toLowerCase().includes(staffSearch.toLowerCase()) ||
@@ -732,6 +817,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const onDutyCount = staffList.filter(s => s.duty_status === 'on_duty').length;
   const offDutyCount = staffList.filter(s => s.duty_status === 'off_duty').length;
   const onLeaveCount = staffList.filter(s => s.duty_status === 'on_leave').length;
+
+  // Department Counters
+  const activeDepartmentsCount = departmentsList.filter(d => d.status === 'active').length;
+  const totalStaffAssignedCount = departmentsList.reduce((acc, curr) => acc + (parseInt(curr.staff_count) || 0), 0);
 
   // Medicine Counters
   const rxRequiredCount = medicinesList.filter(m => m.prescription_required).length;
@@ -827,11 +916,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           <div>
             <h1 style={{ fontSize: '1.7rem', fontWeight: '800' }}>
               {activeTab === 'users' ? 'User Management Directory' : (
-                activeTab === 'staff' ? 'Hospital Staff Roster' : (
-                  activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
-                    activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
-                      activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
-                        activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                activeTab === 'departments' ? 'Hospital Departments & Wards' : (
+                  activeTab === 'staff' ? 'Hospital Staff Roster' : (
+                    activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
+                      activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
+                        activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
+                          activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                        )
                       )
                     )
                   )
@@ -921,6 +1012,104 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                           </button>
                           <button 
                             onClick={() => { setSelectedUser(u); setShowDeleteUserModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: HOSPITAL DEPARTMENTS & WARDS CRUD */}
+        {activeTab === 'departments' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL HOSPITAL WARDS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{departmentsList.length} Departments</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ACTIVE WARDS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{activeDepartmentsCount} Operational</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>STAFF ASSIGNED</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{totalStaffAssignedCount} Medical Staff</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search department by name, code, description, or floor location..." 
+                  value={departmentSearch}
+                  onChange={e => setDepartmentSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <button onClick={() => setShowCreateDepartmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Building2 size={18} />
+                <span>Add New Department</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>CODE</th>
+                    <th style={{ padding: '14px' }}>DEPARTMENT / WARD NAME</th>
+                    <th style={{ padding: '14px' }}>FLOOR LOCATION</th>
+                    <th style={{ padding: '14px' }}>DESCRIPTION</th>
+                    <th style={{ padding: '14px' }}>STAFF ASSIGNED</th>
+                    <th style={{ padding: '14px' }}>STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredDepartments.map(d => (
+                    <tr key={d.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>{d.code}</td>
+                      <td style={{ padding: '14px', fontWeight: '700' }}>{d.name}</td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--teal-accent)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.82rem' }}>
+                          {d.location_floor || 'Ground Floor'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', color: 'var(--text-muted)' }}>{d.description || 'No detailed description.'}</td>
+                      <td style={{ padding: '14px' }}>
+                        <span className="badge badge-primary">
+                          {d.staff_count || 0} Staff
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span className={`badge ${d.status === 'active' ? 'badge-success' : 'badge-warning'}`}>
+                          {d.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => { setSelectedDepartment(d); setShowEditDepartmentModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                          >
+                            <Edit size={14} />
+                            <span>Edit</span>
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedDepartment(d); setShowDeleteDepartmentModal(true); }}
                             className="btn btn-secondary" 
                             style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
                           >
@@ -1535,16 +1724,16 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 <div style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{user.role}</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>HOSPITAL WARDS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{departmentsList.length} Wards</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '20px' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>FORMULARY MEDICINES</div>
                 <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{medicinesList.length} Cataloged</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>MEDICINE CATEGORIES</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{categoriesList.length} Categories</div>
-              </div>
-              <div className="glass-panel" style={{ padding: '20px' }}>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>REGISTERED PATIENTS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{patients.length} Patients</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{patients.length} Patients</div>
               </div>
             </div>
           </div>
@@ -1621,6 +1810,117 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
       </main>
+
+      {/* CREATE DEPARTMENT MODAL */}
+      {showCreateDepartmentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateDepartmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Add Hospital Department / Ward</h3>
+            <form onSubmit={handleCreateDepartment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Name</label>
+                <input type="text" className="input-field" required value={departmentForm.name} onChange={e => setDepartmentForm({...departmentForm, name: e.target.value})} placeholder="e.g. Pediatrics Unit, Surgical ICU" />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Code</label>
+                  <input type="text" className="input-field" value={departmentForm.code} onChange={e => setDepartmentForm({...departmentForm, code: e.target.value})} placeholder="DEPT-PED-01" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Floor Location & Wing</label>
+                  <input type="text" className="input-field" value={departmentForm.location_floor} onChange={e => setDepartmentForm({...departmentForm, location_floor: e.target.value})} placeholder="3rd Floor - Wing C" />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Description</label>
+                <textarea className="input-field" rows={3} value={departmentForm.description} onChange={e => setDepartmentForm({...departmentForm, description: e.target.value})} placeholder="Specialized pediatric inpatient care and clinical monitoring..." />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Ward Operational Status</label>
+                <select className="input-field" value={departmentForm.status} onChange={e => setDepartmentForm({...departmentForm, status: e.target.value})}>
+                  <option value="active">Active & Operational</option>
+                  <option value="inactive">Inactive / Under Renovation</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateDepartmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Department</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT DEPARTMENT MODAL */}
+      {showEditDepartmentModal && selectedDepartment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditDepartmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Department #{selectedDepartment.id}</h3>
+            <form onSubmit={handleUpdateDepartment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Name</label>
+                <input type="text" className="input-field" required value={selectedDepartment.name} onChange={e => setSelectedDepartment({...selectedDepartment, name: e.target.value})} />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Code</label>
+                  <input type="text" className="input-field" value={selectedDepartment.code || ''} onChange={e => setSelectedDepartment({...selectedDepartment, code: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Floor Location & Wing</label>
+                  <input type="text" className="input-field" value={selectedDepartment.location_floor || ''} onChange={e => setSelectedDepartment({...selectedDepartment, location_floor: e.target.value})} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Description</label>
+                <textarea className="input-field" rows={3} value={selectedDepartment.description || ''} onChange={e => setSelectedDepartment({...selectedDepartment, description: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Ward Operational Status</label>
+                <select className="input-field" value={selectedDepartment.status || 'active'} onChange={e => setSelectedDepartment({...selectedDepartment, status: e.target.value})}>
+                  <option value="active">Active & Operational</option>
+                  <option value="inactive">Inactive / Under Renovation</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditDepartmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Department</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE DEPARTMENT MODAL */}
+      {showDeleteDepartmentModal && selectedDepartment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Department Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete department <strong>{selectedDepartment.name}</strong> ({selectedDepartment.code}) from the system?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteDepartmentModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteDepartment} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Department</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CREATE MEDICINE MODAL */}
       {showCreateMedicineModal && (

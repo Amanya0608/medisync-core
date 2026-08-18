@@ -259,8 +259,90 @@ Route::get('/v1/admin/roles', function () {
 });
 
 Route::get('/v1/admin/departments', function () {
-    $departments = DB::table('departments')->get();
+    $departments = DB::table('departments')
+        ->select('departments.*')
+        ->selectRaw('(SELECT COUNT(*) FROM staff WHERE staff.department_id = departments.id) as staff_count')
+        ->orderBy('departments.id', 'asc')
+        ->get();
     return response()->json($departments);
+});
+
+Route::post('/v1/admin/departments', function (Request $request) {
+    $name = trim($request->input('name'));
+    $code = trim($request->input('code')) ?: ('DEPT-' . strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $name), 0, 4)) . '-' . rand(10, 99));
+    $description = trim($request->input('description', ''));
+    $locationFloor = trim($request->input('location_floor', 'Ground Floor'));
+    $status = $request->input('status', 'active');
+
+    if (empty($name)) {
+        return response()->json(['success' => false, 'message' => 'Department name is required.'], 422);
+    }
+
+    $id = DB::table('departments')->insertGetId([
+        'code' => $code,
+        'name' => $name,
+        'description' => $description,
+        'location_floor' => $locationFloor,
+        'status' => $status,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'CREATE_DEPARTMENT',
+        'entity_type' => 'Department',
+        'entity_id' => $id,
+        'payload' => json_encode(['code' => $code, 'name' => $name]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'id' => $id, 'message' => 'Hospital department created successfully.'], 201);
+});
+
+Route::put('/v1/admin/departments/{id}', function (Request $request, $id) {
+    $dept = DB::table('departments')->where('id', $id)->first();
+    if (!$dept) {
+        return response()->json(['success' => false, 'message' => 'Department not found.'], 404);
+    }
+
+    $name = trim($request->input('name', $dept->name));
+    $code = trim($request->input('code', $dept->code));
+    $description = trim($request->input('description', $dept->description));
+    $locationFloor = trim($request->input('location_floor', $dept->location_floor));
+    $status = $request->input('status', $dept->status);
+
+    DB::table('departments')->where('id', $id)->update([
+        'code' => $code,
+        'name' => $name,
+        'description' => $description,
+        'location_floor' => $locationFloor,
+        'status' => $status,
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'UPDATE_DEPARTMENT',
+        'entity_type' => 'Department',
+        'entity_id' => $id,
+        'payload' => json_encode(['code' => $code, 'name' => $name, 'status' => $status]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Department details updated successfully.']);
+});
+
+Route::delete('/v1/admin/departments/{id}', function ($id) {
+    DB::table('departments')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'DELETE_DEPARTMENT',
+        'entity_type' => 'Department',
+        'entity_id' => $id,
+        'payload' => json_encode(['deleted_department_id' => $id]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Department removed successfully.']);
 });
 
 Route::get('/v1/admin/users', function () {

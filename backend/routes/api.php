@@ -1191,7 +1191,7 @@ Route::post('/v1/ai/triage', function (Request $request) {
         return response()->json(['success' => false, 'message' => 'Please provide clinical symptoms for AI assessment.'], 422);
     }
 
-    $apiKey = env('GROQ_API_KEY', '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');
+    $apiKey = env('GROQ_API_KEY');
     $model = env('GROQ_MODEL', 'groq/compound-mini');
 
     $lowInput = strtolower($input);
@@ -1332,7 +1332,7 @@ Route::get('/v1/ai/inventory-risk', function () {
 });
 
 Route::post('/v1/ai/generate-inventory-insights', function (Request $request) {
-    $apiKey = env('GROQ_API_KEY', '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');
+    $apiKey = env('GROQ_API_KEY');
     $model = env('GROQ_MODEL', 'groq/compound-mini');
 
     $batches = DB::table('medicine_batches')

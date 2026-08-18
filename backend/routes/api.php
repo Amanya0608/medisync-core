@@ -258,6 +258,33 @@ Route::get('/v1/admin/roles', function () {
     return response()->json($roles);
 });
 
+Route::post('/v1/admin/roles', function (Request $request) {
+    $name = Str::slug($request->input('name'), '_');
+    $displayName = $request->input('display_name');
+    $description = $request->input('description', '');
+
+    if (empty($name) || empty($displayName)) {
+        return response()->json(['success' => false, 'message' => 'Role name and display name are required.'], 422);
+    }
+
+    $existing = DB::table('roles')->where('name', $name)->first();
+    if ($existing) {
+        return response()->json(['success' => false, 'message' => 'Role with this name key already exists.'], 422);
+    }
+
+    $roleId = DB::table('roles')->insertGetId([
+        'name' => $name,
+        'display_name' => $displayName,
+        'description' => $description,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    $role = DB::table('roles')->where('id', $roleId)->first();
+    return response()->json(['success' => true, 'role' => $role, 'message' => 'New System Role created successfully!']);
+});
+
+
 Route::get('/v1/admin/departments', function () {
     $departments = DB::table('departments')
         ->select('departments.*')
@@ -1673,8 +1700,10 @@ Route::get('/v1/admin/audit-logs', function () {
     $logs = DB::table('audit_logs')
         ->orderBy('created_at', 'desc')
         ->limit(20)
+        ->get();
     return response()->json($logs);
 });
+
 
 Route::put('/v1/user/password', function (Request $request) {
     $userId = $request->input('user_id', 1);

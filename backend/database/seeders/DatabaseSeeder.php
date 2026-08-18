@@ -33,19 +33,66 @@ class DatabaseSeeder extends Seeder
             'created_at' => now(), 'updated_at' => now()
         ]);
 
-        // 2. Permissions & Pivot
-        $perm1 = DB::table('permissions')->insertGetId(['name' => 'inventory.manage', 'display_name' => 'Manage Medicine Inventory', 'module' => 'inventory']);
-        $perm2 = DB::table('permissions')->insertGetId(['name' => 'prescriptions.issue', 'display_name' => 'Issue Electronic Prescriptions', 'module' => 'clinical']);
-        $perm3 = DB::table('permissions')->insertGetId(['name' => 'ai.analytics', 'display_name' => 'Access AI Risk Analytics', 'module' => 'ai']);
-
-        DB::table('role_permissions')->insert([
-            ['role_id' => $adminRoleId, 'permission_id' => $perm1],
-            ['role_id' => $adminRoleId, 'permission_id' => $perm2],
-            ['role_id' => $adminRoleId, 'permission_id' => $perm3],
-            ['role_id' => $pharmacistRoleId, 'permission_id' => $perm1],
-            ['role_id' => $pharmacistRoleId, 'permission_id' => $perm3],
-            ['role_id' => $doctorRoleId, 'permission_id' => $perm2],
+        $nurseRoleId = DB::table('roles')->insertGetId([
+            'name' => 'nurse',
+            'display_name' => 'Staff Nurse / Ward Care Officer',
+            'description' => 'Patient intake, OPD clinic check-ins, and ward bed capacity tracking',
+            'created_at' => now(), 'updated_at' => now()
         ]);
+
+
+        // 2. Permissions & Pivot
+        $perms = [
+            ['name' => 'appointments.view', 'display_name' => 'View Clinical Appointments', 'module' => 'clinical'],
+            ['name' => 'appointments.manage', 'display_name' => 'Schedule & Manage Appointments', 'module' => 'clinical'],
+            ['name' => 'prescriptions.view', 'display_name' => 'View Electronic Prescriptions', 'module' => 'clinical'],
+            ['name' => 'prescriptions.issue', 'display_name' => 'Issue Electronic Prescriptions', 'module' => 'clinical'],
+            ['name' => 'patients.view', 'display_name' => 'View Patient Health Records (EHR)', 'module' => 'clinical'],
+            ['name' => 'patients.manage', 'display_name' => 'Register & Manage Patient EHR', 'module' => 'clinical'],
+            ['name' => 'inventory.view', 'display_name' => 'View Medicine Formulary & Categories', 'module' => 'inventory'],
+            ['name' => 'inventory.manage', 'display_name' => 'Manage Medicine Inventory & Stock', 'module' => 'inventory'],
+            ['name' => 'batches.view', 'display_name' => 'View FEFO Stock Batches', 'module' => 'inventory'],
+            ['name' => 'batches.manage', 'display_name' => 'Intake & Manage FEFO Batches', 'module' => 'inventory'],
+            ['name' => 'suppliers.manage', 'display_name' => 'Manage Pharmaceutical Suppliers', 'module' => 'inventory'],
+            ['name' => 'transactions.view', 'display_name' => 'View Stock Intake & Dispensing Logs', 'module' => 'inventory'],
+            ['name' => 'ai.triage', 'display_name' => 'Access Groq AI Symptom Triage', 'module' => 'ai'],
+            ['name' => 'ai.override', 'display_name' => 'Clinician AI Recommendation Override', 'module' => 'ai'],
+            ['name' => 'ai.analytics', 'display_name' => 'Access AI Expiry & FEFO Risk Intelligence', 'module' => 'ai'],
+            ['name' => 'users.manage', 'display_name' => 'Manage System Users & Roles', 'module' => 'security'],
+            ['name' => 'departments.manage', 'display_name' => 'Manage Hospital Departments & Wards', 'module' => 'security'],
+            ['name' => 'staff.manage', 'display_name' => 'Manage Medical Staff Roster', 'module' => 'security'],
+            ['name' => 'matrix.manage', 'display_name' => 'Manage Role-Permissions Access Matrix', 'module' => 'security'],
+            ['name' => 'audit.view', 'display_name' => 'View System Audit Ledger Logs', 'module' => 'security'],
+        ];
+
+        foreach ($perms as $p) {
+            DB::table('permissions')->updateOrInsert(['name' => $p['name']], $p);
+        }
+
+        // Map Admin to all
+        $allPids = DB::table('permissions')->pluck('id');
+        foreach ($allPids as $pid) {
+            DB::table('role_permissions')->updateOrInsert(['role_id' => $adminRoleId, 'permission_id' => $pid]);
+        }
+
+        // Map Doctor
+        $docPids = DB::table('permissions')->whereIn('module', ['clinical', 'ai'])->pluck('id');
+        foreach ($docPids as $pid) {
+            DB::table('role_permissions')->updateOrInsert(['role_id' => $doctorRoleId, 'permission_id' => $pid]);
+        }
+
+        // Map Pharmacist
+        $pharmPids = DB::table('permissions')->whereIn('module', ['inventory', 'ai'])->pluck('id');
+        foreach ($pharmPids as $pid) {
+            DB::table('role_permissions')->updateOrInsert(['role_id' => $pharmacistRoleId, 'permission_id' => $pid]);
+        }
+
+        // Map Nurse
+        $nursePids = DB::table('permissions')->whereIn('name', ['patients.view', 'patients.manage', 'appointments.view', 'appointments.manage'])->pluck('id');
+        foreach ($nursePids as $pid) {
+            DB::table('role_permissions')->updateOrInsert(['role_id' => $nurseRoleId, 'permission_id' => $pid]);
+        }
+
 
         // 3. Departments
         $pharmacyDeptId = DB::table('departments')->insertGetId([

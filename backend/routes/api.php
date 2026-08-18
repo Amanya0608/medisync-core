@@ -1326,15 +1326,118 @@ Route::put('/v1/ai/triage/{id}/override', function (Request $request, $id) {
     return response()->json(['success' => true, 'message' => 'Clinician triage override updated successfully.']);
 });
 
+// Clinical Appointments & Consultations CRUD Engine
 Route::get('/v1/appointments', function () {
     $apts = DB::table('appointments')
         ->join('patients', 'appointments.patient_id', '=', 'patients.id')
         ->join('staff', 'appointments.doctor_id', '=', 'staff.id')
+        ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
         ->select(
             'appointments.*',
+            'patients.patient_code',
+            'patients.first_name as patient_first_name',
+            'patients.last_name as patient_last_name',
+            'patients.phone as patient_phone',
+            'patients.blood_group',
+            'staff.employee_code',
+            'staff.first_name as doctor_first_name',
+            'staff.last_name as doctor_last_name',
+            'staff.specialization',
+            'departments.name as department_name',
             DB::raw("CONCAT(patients.first_name, ' ', patients.last_name) as patient_name"),
             DB::raw("CONCAT(staff.first_name, ' ', staff.last_name) as doctor_name")
         )
+        ->orderBy('appointments.appointment_date', 'desc')
         ->get();
     return response()->json($apts);
 });
+
+Route::post('/v1/appointments', function (Request $request) {
+    $patientId = $request->input('patient_id');
+    $doctorId = $request->input('doctor_id');
+    $appointmentDate = $request->input('appointment_date');
+    $type = $request->input('type', 'Consultation');
+    $priority = $request->input('priority', 'Normal');
+    $status = $request->input('status', 'Scheduled');
+    $reason = $request->input('reason');
+
+    if (!$patientId || !$doctorId || !$appointmentDate) {
+        return response()->json(['success' => false, 'message' => 'Patient, Doctor, and Appointment Date are required.'], 422);
+    }
+
+    $id = DB::table('appointments')->insertGetId([
+        'patient_id' => (int)$patientId,
+        'doctor_id' => (int)$doctorId,
+        'appointment_date' => $appointmentDate,
+        'type' => $type,
+        'priority' => $priority,
+        'status' => $status,
+        'reason' => $reason,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'APPOINTMENT_SCHEDULED',
+        'entity_type' => 'Appointment',
+        'entity_id' => $id,
+        'payload' => json_encode(['patient_id' => $patientId, 'doctor_id' => $doctorId, 'type' => $type, 'date' => $appointmentDate]),
+        'created_at' => now()
+    ]);
+
+    $created = DB::table('appointments')
+        ->join('patients', 'appointments.patient_id', '=', 'patients.id')
+        ->join('staff', 'appointments.doctor_id', '=', 'staff.id')
+        ->select('appointments.*', DB::raw("CONCAT(patients.first_name, ' ', patients.last_name) as patient_name"), DB::raw("CONCAT(staff.first_name, ' ', staff.last_name) as doctor_name"))
+        ->where('appointments.id', $id)
+        ->first();
+
+    return response()->json(['success' => true, 'message' => 'Clinical appointment scheduled successfully.', 'data' => $created], 201);
+});
+
+Route::put('/v1/appointments/{id}', function (Request $request, $id) {
+    $apt = DB::table('appointments')->where('id', $id)->first();
+    if (!$apt) {
+        return response()->json(['success' => false, 'message' => 'Appointment record not found.'], 404);
+    }
+
+    DB::table('appointments')->where('id', $id)->update([
+        'patient_id' => $request->input('patient_id', $apt->patient_id),
+        'doctor_id' => $request->input('doctor_id', $apt->doctor_id),
+        'appointment_date' => $request->input('appointment_date', $apt->appointment_date),
+        'type' => $request->input('type', $apt->type),
+        'priority' => $request->input('priority', $apt->priority),
+        'status' => $request->input('status', $apt->status),
+        'reason' => $request->input('reason', $apt->reason),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'APPOINTMENT_UPDATED',
+        'entity_type' => 'Appointment',
+        'entity_id' => $id,
+        'payload' => json_encode(['status' => $request->input('status'), 'priority' => $request->input('priority')]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Appointment updated successfully.']);
+});
+
+Route::delete('/v1/appointments/{id}', function ($id) {
+    $apt = DB::table('appointments')->where('id', $id)->first();
+    if (!$apt) {
+        return response()->json(['success' => false, 'message' => 'Appointment record not found.'], 404);
+    }
+
+    DB::table('appointments')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'APPOINTMENT_CANCELLED_DELETED',
+        'entity_type' => 'Appointment',
+        'entity_id' => $id,
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Appointment record deleted successfully.']);
+});
+

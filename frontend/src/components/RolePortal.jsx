@@ -23,6 +23,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     if (pathname.includes('/dashboard/batches')) return 'batches';
     if (pathname.includes('/dashboard/ai-triage')) return 'ai_triage';
     if (pathname.includes('/dashboard/patients')) return 'patients';
+    if (pathname.includes('/dashboard/appointments')) return 'appointments';
     if (pathname.includes('/dashboard/schema')) return 'schema';
     return user.roleKey === 'super_admin' ? 'users' : 'dashboard';
   };
@@ -35,6 +36,14 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [batches, setBatches] = useState([]);
   const [aiRiskData, setAiRiskData] = useState([]);
   const [appointments, setAppointments] = useState([]);
+
+  // Appointments CRUD State
+  const [appointmentSearch, setAppointmentSearch] = useState('');
+  const [appointmentStatusFilter, setAppointmentStatusFilter] = useState('all');
+  const [showCreateAppointmentModal, setShowCreateAppointmentModal] = useState(false);
+  const [showEditAppointmentModal, setShowEditAppointmentModal] = useState(false);
+  const [showDeleteAppointmentModal, setShowDeleteAppointmentModal] = useState(false);
+  const [selectedAppointment, setSelectedAppointment] = useState(null);
 
   // Super Admin Users State
   const [usersList, setUsersList] = useState([]);
@@ -86,7 +95,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   // AI Triage & Chat State
   const [triageLogsList, setTriageLogsList] = useState([]);
   const [triageSearch, setTriageSearch] = useState('');
-  const [triageSubView, setTriageSubView] = useState('chat'); // 'chat' or 'inspection'
+  const [triageSubView, setTriageSubView] = useState('chat');
   const [chatMessages, setChatMessages] = useState([
     {
       id: 1,
@@ -121,18 +130,21 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [showDeleteSupplierModal, setShowDeleteSupplierModal] = useState(false);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
 
-  // User Creation Form State
+  // Form States
+  const [appointmentForm, setAppointmentForm] = useState({
+    patient_id: 1, doctor_id: 1, appointment_date: new Date().toISOString().slice(0, 16),
+    type: 'Consultation', priority: 'Normal', status: 'Scheduled', reason: 'Routine clinical consultation'
+  });
+
   const [userForm, setUserForm] = useState({
     name: '', email: '', password: 'password123', role_id: 2,
     department_id: 1, phone: '+94 77 123 4567', status: 'active', specialization: 'General Care'
   });
 
-  // Department Creation Form State
   const [departmentForm, setDepartmentForm] = useState({
     name: '', code: '', description: '', location_floor: 'Ground Floor - Wing A', status: 'active'
   });
 
-  // Staff Creation Form State
   const [staffForm, setStaffForm] = useState({
     first_name: '', last_name: '', email: '', password: 'password123',
     role_id: 3, department_id: 1, specialization: 'General Medicine',
@@ -140,7 +152,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     phone: '+94 77 123 4567', duty_status: 'on_duty', employee_code: ''
   });
 
-  // Patient Creation Form State
   const [patientForm, setPatientForm] = useState({
     first_name: '', last_name: '', dob: '1995-04-12', gender: 'Female',
     nic_passport: '199564501988', phone: '+94 77 555 1234', email: '',
@@ -149,19 +160,14 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     medical_history: 'Hypertension (Controlled)'
   });
 
-  // Category Creation Form State
-  const [categoryForm, setCategoryForm] = useState({
-    name: '', description: ''
-  });
+  const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
 
-  // Medicine Creation Form State
   const [medicineForm, setMedicineForm] = useState({
     brand_name: '', generic_name: '', category_id: 1, dosage_form: 'Tablet',
     unit: 'pcs', min_reorder_level: 100, max_stock_capacity: 5000,
     unit_price: 35.00, prescription_required: true, status: 'active', barcode: ''
   });
 
-  // Supplier Creation Form State
   const [supplierForm, setSupplierForm] = useState({
     company_name: '', supplier_code: '', contact_person: '',
     email: '', phone: '+94 11 234 5678', address: 'Colombo, Sri Lanka', lead_time_days: 7, rating: 4.80, status: 'active'
@@ -184,6 +190,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     else if (tabId === 'batches') path = '/dashboard/batches';
     else if (tabId === 'ai_triage') path = '/dashboard/ai-triage';
     else if (tabId === 'patients') path = '/dashboard/patients';
+    else if (tabId === 'appointments') path = '/dashboard/appointments';
     else if (tabId === 'schema') path = '/dashboard/schema';
     
     navigate(path);
@@ -200,15 +207,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchMedicinesData();
       fetchDepartmentsData();
       fetchTriageLogsData();
+      fetchAppointmentsData();
 
       const batchesRes = await fetch('/api/v1/batches');
       if (batchesRes.ok) setBatches(await batchesRes.json());
 
       const aiRes = await fetch('/api/v1/ai/inventory-risk');
       if (aiRes.ok) setAiRiskData(await aiRes.json());
-
-      const aptsRes = await fetch('/api/v1/appointments');
-      if (aptsRes.ok) setAppointments(await aptsRes.json());
 
       fetchStaffData();
       fetchSuppliersData();
@@ -219,6 +224,15 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } catch (err) {
       console.error('API Fetch error:', err);
       setBackendStatus({ loading: false, online: false, data: null });
+    }
+  };
+
+  const fetchAppointmentsData = async () => {
+    try {
+      const res = await fetch('/api/v1/appointments');
+      if (res.ok) setAppointments(await res.json());
+    } catch (err) {
+      console.error('Appointments fetch error:', err);
     }
   };
 
@@ -307,6 +321,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
     if (roleKey === 'super_admin') {
       items.push({ id: 'users', label: 'User Management', icon: UserCheck });
+      items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
       items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
       items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
@@ -320,6 +335,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       items.push({ id: 'schema', label: 'Database Architecture', icon: Database });
     } else {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
+      items.push({ id: 'appointments', label: 'Appointments & Consultations', icon: Calendar });
       items.push({ id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI Engine' });
       items.push({ id: 'departments', label: 'Departments & Wards', icon: Building2 });
       items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
@@ -331,15 +347,68 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
         items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
       }
-      if (roleKey === 'doctor') {
-        items.push({ id: 'appointments', label: 'Appointments', icon: Calendar });
-      }
     }
 
     return items;
   };
 
   const navItems = getNavItems();
+
+  // Appointment Handlers
+  const handleCreateAppointment = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/appointments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(appointmentForm)
+      });
+      if (res.ok) {
+        setShowCreateAppointmentModal(false);
+        setAppointmentForm({
+          patient_id: patients[0]?.id || 1, doctor_id: staffList[0]?.id || 1,
+          appointment_date: new Date().toISOString().slice(0, 16),
+          type: 'Consultation', priority: 'Normal', status: 'Scheduled', reason: 'Clinical evaluation'
+        });
+        fetchAppointmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateAppointment = async (e) => {
+    e.preventDefault();
+    if (!selectedAppointment) return;
+    try {
+      const res = await fetch(`/api/v1/appointments/${selectedAppointment.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedAppointment)
+      });
+      if (res.ok) {
+        setShowEditAppointmentModal(false);
+        setSelectedAppointment(null);
+        fetchAppointmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteAppointment = async () => {
+    if (!selectedAppointment) return;
+    try {
+      const res = await fetch(`/api/v1/appointments/${selectedAppointment.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteAppointmentModal(false);
+        setSelectedAppointment(null);
+        fetchAppointmentsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // AI Chat & Triage Handlers
   const handleSendChatMessage = async (e) => {
@@ -349,7 +418,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     const userText = chatInput.trim();
     const nowTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // Add user message to UI state immediately
     const userMsg = { id: Date.now(), sender: 'user', text: userText, timestamp: nowTime };
     setChatMessages(prev => [...prev, userMsg]);
     setChatInput('');
@@ -831,6 +899,19 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setRecalculatingAll(false);
   };
 
+  const filteredAppointments = appointments.filter(a => {
+    const matchesSearch = 
+      (a.patient_name && a.patient_name.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.patient_code && a.patient_code.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.doctor_name && a.doctor_name.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.specialization && a.specialization.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.reason && a.reason.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
+      (a.type && a.type.toLowerCase().includes(appointmentSearch.toLowerCase()));
+
+    if (appointmentStatusFilter === 'all') return matchesSearch;
+    return matchesSearch && a.status === appointmentStatusFilter;
+  });
+
   const filteredUsers = usersList.filter(u => 
     u.name.toLowerCase().includes(userSearch.toLowerCase()) ||
     u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
@@ -889,6 +970,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     s.supplier_code.toLowerCase().includes(supplierSearch.toLowerCase()) ||
     (s.contact_person && s.contact_person.toLowerCase().includes(supplierSearch.toLowerCase()))
   );
+
+  // Appointment Counters
+  const scheduledCount = appointments.filter(a => a.status === 'Scheduled').length;
+  const inProgressCount = appointments.filter(a => a.status === 'In_Progress').length;
+  const emergencyPriorityCount = appointments.filter(a => a.priority === 'Emergency' || a.priority === 'High').length;
+  const completedCount = appointments.filter(a => a.status === 'Completed').length;
 
   // Triage Counters
   const emergencyTriageCount = triageLogsList.filter(t => t.suggested_triage_level === 'Emergency').length;
@@ -1000,13 +1087,15 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           <div>
             <h1 style={{ fontSize: '1.7rem', fontWeight: '800' }}>
               {activeTab === 'users' ? 'User Management Directory' : (
-                activeTab === 'ai_triage' ? 'MediSync AI Clinical Symptom Triage & Chat' : (
-                  activeTab === 'departments' ? 'Hospital Departments & Wards' : (
-                    activeTab === 'staff' ? 'Hospital Staff Roster' : (
-                      activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
-                        activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
-                          activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
-                            activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                activeTab === 'appointments' ? 'Clinical Appointments & Patient Consultations' : (
+                  activeTab === 'ai_triage' ? 'MediSync AI Clinical Symptom Triage & Chat' : (
+                    activeTab === 'departments' ? 'Hospital Departments & Wards' : (
+                      activeTab === 'staff' ? 'Hospital Staff Roster' : (
+                        activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
+                          activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
+                            activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
+                              activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                            )
                           )
                         )
                       )
@@ -1030,6 +1119,164 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             </button>
           </div>
         </header>
+
+        {/* TAB: CLINICAL APPOINTMENTS & CONSULTATIONS */}
+        {activeTab === 'appointments' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL APPOINTMENTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{appointments.length} Booked</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>SCHEDULED / IN PROGRESS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="pulse-dot"></div>
+                  <span>{scheduledCount + inProgressCount} Active</span>
+                </div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>HIGH / EMERGENCY PRIORITY</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{emergencyPriorityCount} Priority</span>
+                </div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>COMPLETED CONSULTATIONS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{completedCount} Completed</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search appointments by patient, doctor, specialization, reason, or consultation type..." 
+                  value={appointmentSearch}
+                  onChange={e => setAppointmentSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                {[
+                  { id: 'all', label: 'All Statuses' },
+                  { id: 'Scheduled', label: 'Scheduled' },
+                  { id: 'In_Progress', label: 'In Progress' },
+                  { id: 'Completed', label: 'Completed' },
+                  { id: 'Cancelled', label: 'Cancelled' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setAppointmentStatusFilter(f.id)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      background: appointmentStatusFilter === f.id ? 'var(--primary)' : 'transparent',
+                      color: appointmentStatusFilter === f.id ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => setShowCreateAppointmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Calendar size={18} />
+                <span>Book New Appointment</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>APPOINTMENT DATE & TIME</th>
+                    <th style={{ padding: '14px' }}>PATIENT (EHR)</th>
+                    <th style={{ padding: '14px' }}>ATTENDING CLINICIAN</th>
+                    <th style={{ padding: '14px' }}>CONSULTATION TYPE</th>
+                    <th style={{ padding: '14px' }}>PRIORITY</th>
+                    <th style={{ padding: '14px' }}>CLINICAL REASON</th>
+                    <th style={{ padding: '14px' }}>STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredAppointments.map(a => (
+                    <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Clock size={14} />
+                          <span>{new Date(a.appointment_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Booking #{a.id}</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700' }}>{a.patient_name}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{a.patient_code} • {a.blood_group || 'O+'}</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700' }}>Dr. {a.doctor_name}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.specialization || 'General Care'} ({a.department_name || 'OPD'})</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                          {a.type}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ 
+                          padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.78rem',
+                          background: a.priority === 'Emergency' || a.priority === 'High' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                          color: a.priority === 'Emergency' || a.priority === 'High' ? 'var(--danger)' : 'var(--success)'
+                        }}>
+                          {a.priority}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', maxWidth: '220px' }}>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={a.reason}>
+                          {a.reason || 'Routine consultation.'}
+                        </div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span className={`badge ${
+                          a.status === 'Completed' ? 'badge-success' : (a.status === 'In_Progress' || a.status === 'Scheduled' ? 'badge-primary' : 'badge-warning')
+                        }`} style={{ textTransform: 'capitalize' }}>
+                          {a.status ? a.status.replace('_', ' ') : 'Scheduled'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => { setSelectedAppointment(a); setShowEditAppointmentModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                          >
+                            <Edit size={14} />
+                            <span>Edit</span>
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedAppointment(a); setShowDeleteAppointmentModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
         {/* TAB: MEDISYNC AI CLINICAL TRIAGE & INTERACTIVE CHAT */}
         {activeTab === 'ai_triage' && (
@@ -1113,7 +1360,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             {/* MODE 1: INTERACTIVE AI CLINICAL CHAT */}
             {triageSubView === 'chat' && (
               <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', height: '540px', padding: '0', overflow: 'hidden' }}>
-                {/* Chat Header */}
                 <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.15)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <div style={{ background: 'var(--primary)', padding: '8px', borderRadius: '10px', color: '#fff', display: 'flex' }}>
@@ -1131,7 +1377,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <span className="badge badge-primary" style={{ fontSize: '0.75rem' }}>MediSync AI Engine Connected</span>
                 </div>
 
-                {/* Chat Messages Stream */}
                 <div style={{ flex: 1, padding: '20px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {chatMessages.map(msg => (
                     <div key={msg.id} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start' }}>
@@ -1188,7 +1433,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   )}
                 </div>
 
-                {/* Chat Input Bar */}
                 <form onSubmit={handleSendChatMessage} style={{ padding: '14px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', gap: '12px', background: 'rgba(0,0,0,0.1)' }}>
                   <input
                     type="text"
@@ -2165,6 +2409,177 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
       </main>
+
+      {/* CREATE APPOINTMENT MODAL */}
+      {showCreateAppointmentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateAppointmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Book New Clinical Appointment</h3>
+            <form onSubmit={handleCreateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Patient (EHR)</label>
+                <select className="input-field" value={appointmentForm.patient_id} onChange={e => setAppointmentForm({...appointmentForm, patient_id: parseInt(e.target.value)})}>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name} ({p.blood_group || 'O+'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Attending Doctor / Clinician</label>
+                <select className="input-field" value={appointmentForm.doctor_id} onChange={e => setAppointmentForm({...appointmentForm, doctor_id: parseInt(e.target.value)})}>
+                  {staffList.map(st => (
+                    <option key={st.id} value={st.id}>{st.employee_code} - Dr. {st.first_name} {st.last_name} ({st.specialization || 'General Care'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Appointment Date & Time</label>
+                <input type="datetime-local" className="input-field" required value={appointmentForm.appointment_date} onChange={e => setAppointmentForm({...appointmentForm, appointment_date: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Type</label>
+                  <select className="input-field" value={appointmentForm.type} onChange={e => setAppointmentForm({...appointmentForm, type: e.target.value})}>
+                    <option value="Consultation">Consultation</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Routine Checkup">Routine Checkup</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Priority Level</label>
+                  <select className="input-field" value={appointmentForm.priority} onChange={e => setAppointmentForm({...appointmentForm, priority: e.target.value})}>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High Priority</option>
+                    <option value="Emergency">Emergency</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <select className="input-field" value={appointmentForm.status} onChange={e => setAppointmentForm({...appointmentForm, status: e.target.value})}>
+                    <option value="Scheduled">Scheduled</option>
+                    <option value="In_Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Reason / Notes</label>
+                <textarea className="input-field" rows={3} value={appointmentForm.reason} onChange={e => setAppointmentForm({...appointmentForm, reason: e.target.value})} placeholder="Reason for consultation or follow-up symptoms..." />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateAppointmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Book Appointment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT APPOINTMENT MODAL */}
+      {showEditAppointmentModal && selectedAppointment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditAppointmentModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Clinical Appointment #{selectedAppointment.id}</h3>
+            <form onSubmit={handleUpdateAppointment} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Select Patient (EHR)</label>
+                <select className="input-field" value={selectedAppointment.patient_id} onChange={e => setSelectedAppointment({...selectedAppointment, patient_id: parseInt(e.target.value)})}>
+                  {patients.map(p => (
+                    <option key={p.id} value={p.id}>{p.patient_code} - {p.first_name} {p.last_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Attending Doctor / Clinician</label>
+                <select className="input-field" value={selectedAppointment.doctor_id} onChange={e => setSelectedAppointment({...selectedAppointment, doctor_id: parseInt(e.target.value)})}>
+                  {staffList.map(st => (
+                    <option key={st.id} value={st.id}>{st.employee_code} - Dr. {st.first_name} {st.last_name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Appointment Date & Time</label>
+                <input type="datetime-local" className="input-field" required value={selectedAppointment.appointment_date ? selectedAppointment.appointment_date.replace(' ', 'T').slice(0, 16) : ''} onChange={e => setSelectedAppointment({...selectedAppointment, appointment_date: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Type</label>
+                  <select className="input-field" value={selectedAppointment.type} onChange={e => setSelectedAppointment({...selectedAppointment, type: e.target.value})}>
+                    <option value="Consultation">Consultation</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Emergency">Emergency</option>
+                    <option value="Routine Checkup">Routine Checkup</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Priority Level</label>
+                  <select className="input-field" value={selectedAppointment.priority} onChange={e => setSelectedAppointment({...selectedAppointment, priority: e.target.value})}>
+                    <option value="Low">Low</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">High Priority</option>
+                    <option value="Emergency">Emergency</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
+                  <select className="input-field" value={selectedAppointment.status} onChange={e => setSelectedAppointment({...selectedAppointment, status: e.target.value})}>
+                    <option value="Scheduled">Scheduled</option>
+                    <option value="In_Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Clinical Reason / Notes</label>
+                <textarea className="input-field" rows={3} value={selectedAppointment.reason || ''} onChange={e => setSelectedAppointment({...selectedAppointment, reason: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditAppointmentModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Appointment</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE APPOINTMENT MODAL */}
+      {showDeleteAppointmentModal && selectedAppointment && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Appointment Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete clinical appointment <strong>#{selectedAppointment.id}</strong> for patient <strong>{selectedAppointment.patient_name}</strong>?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteAppointmentModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteAppointment} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Appointment</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CLINICIAN TRIAGE OVERRIDE MODAL */}
       {showOverrideModal && selectedTriageLog && (

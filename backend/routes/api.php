@@ -1191,7 +1191,7 @@ Route::post('/v1/ai/triage', function (Request $request) {
         return response()->json(['success' => false, 'message' => 'Please provide clinical symptoms for AI assessment.'], 422);
     }
 
-    $apiKey = env('GROQ_API_KEY', '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');
+    $apiKey = env('GROQ_API_KEY');
     $model = env('GROQ_MODEL', 'groq/compound-mini');
 
     $lowInput = strtolower($input);
@@ -1332,7 +1332,7 @@ Route::get('/v1/ai/inventory-risk', function () {
 });
 
 Route::post('/v1/ai/generate-inventory-insights', function (Request $request) {
-    $apiKey = env('GROQ_API_KEY', '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');
+    $apiKey = env('GROQ_API_KEY');
     $model = env('GROQ_MODEL', 'groq/compound-mini');
 
     $batches = DB::table('medicine_batches')
@@ -1512,6 +1512,172 @@ Route::delete('/v1/ai/inventory-risk/{id}', function ($id) {
 
     return response()->json(['success' => true, 'message' => 'AI Inventory Insight deleted successfully.']);
 });
+
+// Permissions & Role-Permission Matrix REST API
+Route::get('/v1/admin/permissions', function () {
+    $permissions = DB::table('permissions')->get()->map(function ($p) {
+        $roles = DB::table('role_permissions')
+            ->join('roles', 'role_permissions.role_id', '=', 'roles.id')
+            ->where('role_permissions.permission_id', $p->id)
+            ->select('roles.id', 'roles.name', 'roles.display_name')
+            ->get();
+
+        $p->roles = $roles;
+        $p->roles_count = count($roles);
+        return $p;
+    });
+
+    return response()->json($permissions);
+});
+
+Route::get('/v1/admin/role-permissions-matrix', function () {
+    $roles = DB::table('roles')->select('id', 'name', 'display_name')->get();
+    $permissions = DB::table('permissions')->get();
+    $mappings = DB::table('role_permissions')->get();
+
+    $matrix = [];
+    foreach ($roles as $role) {
+        $matrix[$role->id] = [];
+    }
+    foreach ($mappings as $m) {
+        $matrix[$m->role_id][] = (int)$m->permission_id;
+    }
+
+    return response()->json([
+        'roles' => $roles,
+        'permissions' => $permissions,
+        'matrix' => $matrix
+    ]);
+});
+
+Route::post('/v1/admin/permissions', function (Request $request) {
+    $validator = Validator::make($request->all(), [
+        'name' => 'required|string|unique:permissions,name',
+        'display_name' => 'required|string',
+        'module' => 'nullable|string'
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json(['success' => false, 'errors' => $validator->errors()], 422);
+    }
+
+    $id = DB::table('permissions')->insertGetId([
+        'name' => trim($request->input('name')),
+        'display_name' => trim($request->input('display_name')),
+        'module' => trim($request->input('module', 'general')),
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('role_permissions')->insertOrIgnore([
+        'role_id' => 1,
+        'permission_id' => $id
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PERMISSION_CREATED',
+        'entity_type' => 'Permission',
+        'entity_id' => $id,
+        'payload' => json_encode(['name' => $request->input('name')]),
+        'created_at' => now()
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Permission created successfully.',
+        'id' => $id
+    ]);
+});
+
+Route::put('/v1/admin/permissions/{id}', function (Request $request, $id) {
+    $perm = DB::table('permissions')->where('id', $id)->first();
+    if (!$perm) {
+        return response()->json(['success' => false, 'message' => 'Permission not found.'], 404);
+    }
+
+    DB::table('permissions')->where('id', $id)->update([
+        'name' => trim($request->input('name', $perm->name)),
+        'display_name' => trim($request->input('display_name', $perm->display_name)),
+        'module' => trim($request->input('module', $perm->module)),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PERMISSION_UPDATED',
+        'entity_type' => 'Permission',
+        'entity_id' => $id,
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Permission updated successfully.']);
+});
+
+Route::delete('/v1/admin/permissions/{id}', function ($id) {
+    $perm = DB::table('permissions')->where('id', $id)->first();
+    if (!$perm) {
+        return response()->json(['success' => false, 'message' => 'Permission not found.'], 404);
+    }
+
+    DB::table('role_permissions')->where('permission_id', $id)->delete();
+    DB::table('permissions')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PERMISSION_DELETED',
+        'entity_type' => 'Permission',
+        'entity_id' => $id,
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Permission deleted successfully.']);
+});
+
+Route::post('/v1/admin/role-permissions/toggle', function (Request $request) {
+    $roleId = (int)$request->input('role_id');
+    $permissionId = (int)$request->input('permission_id');
+
+    $existing = DB::table('role_permissions')
+        ->where('role_id', $roleId)
+        ->where('permission_id', $permissionId)
+        ->first();
+
+    if ($existing) {
+        DB::table('role_permissions')
+            ->where('role_id', $roleId)
+            ->where('permission_id', $permissionId)
+            ->delete();
+        $granted = false;
+    } else {
+        DB::table('role_permissions')->insert([
+            'role_id' => $roleId,
+            'permission_id' => $permissionId
+        ]);
+        $granted = true;
+    }
+
+    DB::table('audit_logs')->insert([
+        'action' => $granted ? 'ROLE_PERMISSION_GRANTED' : 'ROLE_PERMISSION_REVOKED',
+        'entity_type' => 'RolePermission',
+        'entity_id' => $roleId,
+        'payload' => json_encode(['role_id' => $roleId, 'permission_id' => $permissionId, 'granted' => $granted]),
+        'created_at' => now()
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'granted' => $granted,
+        'message' => $granted ? 'Permission granted to role.' : 'Permission revoked from role.'
+    ]);
+});
+
+Route::get('/v1/admin/audit-logs', function () {
+    $logs = DB::table('audit_logs')
+        ->orderBy('created_at', 'desc')
+        ->limit(20)
+        ->get();
+    return response()->json($logs);
+});
+
+
 
 
 Route::put('/v1/ai/triage/{id}/override', function (Request $request, $id) {

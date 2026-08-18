@@ -1673,9 +1673,34 @@ Route::get('/v1/admin/audit-logs', function () {
     $logs = DB::table('audit_logs')
         ->orderBy('created_at', 'desc')
         ->limit(20)
-        ->get();
     return response()->json($logs);
 });
+
+Route::put('/v1/user/password', function (Request $request) {
+    $userId = $request->input('user_id', 1);
+    $newPassword = $request->input('new_password');
+
+    if (empty($newPassword) || strlen($newPassword) < 6) {
+        return response()->json(['success' => false, 'message' => 'New password must be at least 6 characters long.'], 422);
+    }
+
+    DB::table('users')->where('id', $userId)->update([
+        'password' => Hash::make($newPassword),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'user_id' => $userId,
+        'action' => 'USER_PASSWORD_UPDATED',
+        'entity_type' => 'User',
+        'entity_id' => $userId,
+        'payload' => json_encode(['timestamp' => now()->toIso8601String()]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Account password updated successfully!']);
+});
+
 
 
 

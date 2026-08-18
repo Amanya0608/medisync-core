@@ -382,6 +382,151 @@ Route::delete('/v1/admin/users/{id}', function ($id) {
     return response()->json(['success' => true, 'message' => 'Staff user removed from system.']);
 });
 
+// Staff Roster CRUD API Endpoints
+Route::get('/v1/admin/staff', function () {
+    $staff = DB::table('staff')
+        ->join('users', 'staff.user_id', '=', 'users.id')
+        ->leftJoin('roles', 'users.role_id', '=', 'roles.id')
+        ->leftJoin('departments', 'staff.department_id', '=', 'departments.id')
+        ->select(
+            'staff.id',
+            'staff.employee_code',
+            'staff.first_name',
+            'staff.last_name',
+            'staff.specialization',
+            'staff.license_number',
+            'staff.phone',
+            'staff.status as duty_status',
+            'staff.created_at',
+            'users.id as user_id',
+            'users.email',
+            'users.status as account_status',
+            'roles.name as role_key',
+            'roles.display_name as role_name',
+            'departments.name as department_name',
+            'departments.id as department_id'
+        )
+        ->orderBy('staff.id', 'desc')
+        ->get();
+
+    return response()->json($staff);
+});
+
+Route::post('/v1/admin/staff', function (Request $request) {
+    $firstName = trim($request->input('first_name'));
+    $lastName = trim($request->input('last_name', 'Staff'));
+    $email = trim($request->input('email'));
+    $password = $request->input('password', 'password123');
+    $roleId = (int)$request->input('role_id', 3); // Default Medical Officer / Doctor
+    $deptId = (int)$request->input('department_id', 1);
+    $specialization = trim($request->input('specialization', 'General Medicine'));
+    $licenseNumber = trim($request->input('license_number', 'SLMC-MED-' . rand(1000, 9999)));
+    $phone = trim($request->input('phone', '+94 77 123 4567'));
+    $dutyStatus = $request->input('duty_status', 'on_duty');
+    $employeeCode = trim($request->input('employee_code')) ?: ('EMP-DOC-' . rand(100, 999));
+
+    // 1. Create User account
+    $userId = DB::table('users')->insertGetId([
+        'role_id' => $roleId,
+        'name' => "{$firstName} {$lastName}",
+        'email' => $email,
+        'password' => Hash::make($password),
+        'status' => 'active',
+        'phone' => $phone,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    // 2. Create Staff profile linked to user
+    $staffId = DB::table('staff')->insertGetId([
+        'user_id' => $userId,
+        'department_id' => $deptId,
+        'employee_code' => $employeeCode,
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'specialization' => $specialization,
+        'license_number' => $licenseNumber,
+        'phone' => $phone,
+        'status' => $dutyStatus,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'user_id' => $userId,
+        'action' => 'ADMIN_CREATE_STAFF',
+        'entity_type' => 'Staff',
+        'entity_id' => $staffId,
+        'payload' => json_encode(['employee_code' => $employeeCode, 'name' => "{$firstName} {$lastName}"]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'id' => $staffId, 'message' => 'Hospital staff profile created successfully.'], 201);
+});
+
+Route::put('/v1/admin/staff/{id}', function (Request $request, $id) {
+    $firstName = trim($request->input('first_name'));
+    $lastName = trim($request->input('last_name'));
+    $deptId = (int)$request->input('department_id');
+    $specialization = trim($request->input('specialization'));
+    $licenseNumber = trim($request->input('license_number'));
+    $phone = trim($request->input('phone'));
+    $dutyStatus = $request->input('duty_status', 'on_duty');
+
+    $staff = DB::table('staff')->where('id', $id)->first();
+    if (!$staff) {
+        return response()->json(['success' => false, 'message' => 'Staff member not found.'], 404);
+    }
+
+    // Update staff record
+    DB::table('staff')->where('id', $id)->update([
+        'department_id' => $deptId,
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'specialization' => $specialization,
+        'license_number' => $licenseNumber,
+        'phone' => $phone,
+        'status' => $dutyStatus,
+        'updated_at' => now()
+    ]);
+
+    // Update linked user name & phone
+    DB::table('users')->where('id', $staff->user_id)->update([
+        'name' => "{$firstName} {$lastName}",
+        'phone' => $phone,
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'user_id' => $staff->user_id,
+        'action' => 'ADMIN_UPDATE_STAFF',
+        'entity_type' => 'Staff',
+        'entity_id' => $id,
+        'payload' => json_encode(['duty_status' => $dutyStatus, 'department_id' => $deptId]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Staff details updated successfully.']);
+});
+
+Route::delete('/v1/admin/staff/{id}', function ($id) {
+    $staff = DB::table('staff')->where('id', $id)->first();
+    if ($staff) {
+        DB::table('staff')->where('id', $id)->delete();
+        DB::table('users')->where('id', $staff->user_id)->delete();
+    }
+
+    DB::table('audit_logs')->insert([
+        'action' => 'ADMIN_DELETE_STAFF',
+        'entity_type' => 'Staff',
+        'entity_id' => $id,
+        'payload' => json_encode(['deleted_staff_id' => $id]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Staff member removed successfully.']);
+});
+
 // Suppliers CRUD API Endpoints
 Route::get('/v1/admin/suppliers', function () {
     $suppliers = DB::table('suppliers')->orderBy('id', 'desc')->get();
@@ -607,25 +752,112 @@ Route::post('/v1/admin/suppliers/{id}/recalculate', function ($id) {
 // =========================================================================
 
 Route::get('/v1/patients', function () {
-    $patients = DB::table('patients')->orderBy('created_at', 'desc')->get();
+    $patients = DB::table('patients')->orderBy('id', 'desc')->get();
     return response()->json($patients);
 });
 
 Route::post('/v1/patients', function (Request $request) {
+    $firstName = trim($request->input('first_name'));
+    $lastName = trim($request->input('last_name', ''));
+    $dob = $request->input('dob', '1995-01-01');
+    $gender = $request->input('gender', 'Female');
+    $nic = trim($request->input('nic_passport'));
+    $phone = trim($request->input('phone'));
+    $email = trim($request->input('email'));
+    $bloodGroup = trim($request->input('blood_group', 'O+'));
+    $emergName = trim($request->input('emergency_contact_name'));
+    $emergPhone = trim($request->input('emergency_contact_phone'));
+    $allergies = trim($request->input('allergies', 'None'));
+    $medHistory = trim($request->input('medical_history', 'Routine Clinical Care'));
+    $code = trim($request->input('patient_code')) ?: ('PAT-2026-' . rand(100, 999));
+
     $id = DB::table('patients')->insertGetId([
-        'patient_code' => 'PAT-2026-' . rand(100, 999),
-        'first_name' => $request->input('first_name'),
-        'last_name' => $request->input('last_name'),
-        'dob' => $request->input('dob', '1995-01-01'),
-        'gender' => $request->input('gender', 'Female'),
-        'nic_passport' => $request->input('nic_passport'),
-        'phone' => $request->input('phone'),
-        'blood_group' => $request->input('blood_group', 'O+'),
-        'allergies' => $request->input('allergies', 'None'),
-        'medical_history' => $request->input('medical_history', 'N/A'),
-        'created_at' => now(), 'updated_at' => now()
+        'patient_code' => $code,
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'dob' => $dob,
+        'gender' => $gender,
+        'nic_passport' => $nic,
+        'phone' => $phone,
+        'email' => $email,
+        'blood_group' => $bloodGroup,
+        'emergency_contact_name' => $emergName,
+        'emergency_contact_phone' => $emergPhone,
+        'allergies' => $allergies,
+        'medical_history' => $medHistory,
+        'created_at' => now(),
+        'updated_at' => now()
     ]);
-    return response()->json(['success' => true, 'id' => $id], 201);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'CREATE_PATIENT',
+        'entity_type' => 'Patient',
+        'entity_id' => $id,
+        'payload' => json_encode(['patient_code' => $code, 'name' => "{$firstName} {$lastName}"]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'id' => $id, 'message' => 'Patient EHR record created successfully.'], 201);
+});
+
+Route::put('/v1/patients/{id}', function (Request $request, $id) {
+    $patient = DB::table('patients')->where('id', $id)->first();
+    if (!$patient) {
+        return response()->json(['success' => false, 'message' => 'Patient record not found.'], 404);
+    }
+
+    $firstName = trim($request->input('first_name', $patient->first_name));
+    $lastName = trim($request->input('last_name', $patient->last_name));
+    $dob = $request->input('dob', $patient->dob);
+    $gender = $request->input('gender', $patient->gender);
+    $nic = trim($request->input('nic_passport', $patient->nic_passport));
+    $phone = trim($request->input('phone', $patient->phone));
+    $email = trim($request->input('email', $patient->email));
+    $bloodGroup = trim($request->input('blood_group', $patient->blood_group));
+    $emergName = trim($request->input('emergency_contact_name', $patient->emergency_contact_name));
+    $emergPhone = trim($request->input('emergency_contact_phone', $patient->emergency_contact_phone));
+    $allergies = trim($request->input('allergies', $patient->allergies));
+    $medHistory = trim($request->input('medical_history', $patient->medical_history));
+
+    DB::table('patients')->where('id', $id)->update([
+        'first_name' => $firstName,
+        'last_name' => $lastName,
+        'dob' => $dob,
+        'gender' => $gender,
+        'nic_passport' => $nic,
+        'phone' => $phone,
+        'email' => $email,
+        'blood_group' => $bloodGroup,
+        'emergency_contact_name' => $emergName,
+        'emergency_contact_phone' => $emergPhone,
+        'allergies' => $allergies,
+        'medical_history' => $medHistory,
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'UPDATE_PATIENT',
+        'entity_type' => 'Patient',
+        'entity_id' => $id,
+        'payload' => json_encode(['blood_group' => $bloodGroup, 'allergies' => $allergies]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Patient EHR record updated successfully.']);
+});
+
+Route::delete('/v1/patients/{id}', function ($id) {
+    DB::table('patients')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'DELETE_PATIENT',
+        'entity_type' => 'Patient',
+        'entity_id' => $id,
+        'payload' => json_encode(['deleted_patient_id' => $id]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Patient EHR record removed successfully.']);
 });
 
 Route::get('/v1/medicines', function () {

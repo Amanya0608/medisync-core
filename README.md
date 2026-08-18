@@ -170,7 +170,7 @@ cd medisync-core
    DB_USERNAME=root
    DB_PASSWORD=
 
-   GROQ_API_KEY=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
+  
    ```
 
 5. Run database migrations and seed default data:

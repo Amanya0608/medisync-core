@@ -1673,8 +1673,10 @@ Route::get('/v1/admin/audit-logs', function () {
     $logs = DB::table('audit_logs')
         ->orderBy('created_at', 'desc')
         ->limit(20)
+        ->get();
     return response()->json($logs);
 });
+
 
 Route::put('/v1/user/password', function (Request $request) {
     $userId = $request->input('user_id', 1);

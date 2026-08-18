@@ -2871,71 +2871,99 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                    <th style={{ padding: '14px' }}>CODE</th>
-                    <th style={{ padding: '14px' }}>STAFF MEMBER</th>
-                    <th style={{ padding: '14px' }}>ROLE / POSITION</th>
-                    <th style={{ padding: '14px' }}>DEPARTMENT WARD</th>
-                    <th style={{ padding: '14px' }}>SPECIALIZATION & SLMC LICENSE</th>
-                    <th style={{ padding: '14px' }}>PHONE</th>
-                    <th style={{ padding: '14px' }}>DUTY STATUS</th>
-                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                    <th style={{ padding: '14px 16px', minWidth: '110px' }}>CODE</th>
+                    <th style={{ padding: '14px 16px', minWidth: '180px' }}>STAFF MEMBER</th>
+                    <th style={{ padding: '14px 16px', minWidth: '180px' }}>ROLE / POSITION</th>
+                    <th style={{ padding: '14px 16px', minWidth: '150px' }}>DEPARTMENT WARD</th>
+                    <th style={{ padding: '14px 16px', minWidth: '200px' }}>SPECIALIZATION & SLMC LICENSE</th>
+                    <th style={{ padding: '14px 16px', minWidth: '140px' }}>PHONE</th>
+                    <th style={{ padding: '14px 16px', minWidth: '120px' }}>DUTY STATUS</th>
+                    <th style={{ padding: '14px 16px', minWidth: '140px' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredStaff.map(st => (
-                    <tr key={st.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>{st.employee_code}</td>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ fontWeight: '700' }}>{st.first_name} {st.last_name}</div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{st.email}</div>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <span className="badge badge-primary" style={{ 
-                          borderColor: st.role_key === 'doctor' ? 'var(--success)' : (st.role_key === 'pharmacist' ? 'var(--teal-accent)' : 'var(--primary)'),
-                          color: st.role_key === 'doctor' ? 'var(--success)' : (st.role_key === 'pharmacist' ? 'var(--teal-accent)' : 'var(--primary)')
-                        }}>
-                          {st.role_name || 'Staff Member'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px', color: 'var(--text-muted)' }}>{st.department_name || 'General OPD'}</td>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ fontWeight: '600' }}>{st.specialization || 'General Practice'}</div>
-                        {st.license_number && (
-                          <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{st.license_number}</div>
-                        )}
-                      </td>
-                      <td style={{ padding: '14px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{st.phone || '+94 77 123 4567'}</td>
-                      <td style={{ padding: '14px' }}>
-                        <span className={`badge ${
-                          st.duty_status === 'on_duty' ? 'badge-success' : (st.duty_status === 'off_duty' ? 'badge-warning' : 'badge-danger')
-                        }`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          {st.duty_status === 'on_duty' && <div className="pulse-dot" style={{ width: '6px', height: '6px' }}></div>}
-                          <span style={{ textTransform: 'capitalize' }}>{st.duty_status ? st.duty_status.replace('_', ' ') : 'On Duty'}</span>
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ display: 'flex', gap: '8px' }}>
-                          <button 
-                            onClick={() => { setSelectedStaff(st); setShowEditStaffModal(true); }}
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
-                          >
-                            <Edit size={14} />
-                            <span>Edit</span>
-                          </button>
-                          <button 
-                            onClick={() => { setSelectedStaff(st); setShowDeleteStaffModal(true); }}
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredStaff.map(st => {
+                    const roleKeyLower = (st.role_key || st.role_name || '').toLowerCase();
+                    const isDoctor = roleKeyLower.includes('doctor') || roleKeyLower.includes('medical');
+                    const isPharm = roleKeyLower.includes('pharm');
+                    const isAdmin = roleKeyLower.includes('admin') || roleKeyLower.includes('director');
+
+                    const badgeBg = isDoctor 
+                      ? 'rgba(16, 185, 129, 0.12)' 
+                      : (isPharm ? 'rgba(56, 189, 248, 0.12)' : (isAdmin ? 'rgba(245, 158, 11, 0.12)' : 'rgba(139, 92, 246, 0.12)'));
+                    const badgeColor = isDoctor 
+                      ? 'var(--success)' 
+                      : (isPharm ? 'var(--primary)' : (isAdmin ? 'var(--warning)' : '#a78bfa'));
+                    const badgeBorder = isDoctor 
+                      ? '1px solid rgba(16, 185, 129, 0.3)' 
+                      : (isPharm ? '1px solid rgba(56, 189, 248, 0.3)' : (isAdmin ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(139, 92, 246, 0.3)'));
+
+                    return (
+                      <tr key={st.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)', whiteSpace: 'nowrap' }}>{st.employee_code}</td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ fontWeight: '700' }}>{st.first_name} {st.last_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{st.email}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <span style={{ 
+                            background: badgeBg,
+                            color: badgeColor,
+                            border: badgeBorder,
+                            padding: '4px 10px',
+                            borderRadius: '8px',
+                            fontWeight: '700',
+                            fontSize: '0.78rem',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            whiteSpace: 'nowrap',
+                            letterSpacing: '0.3px'
+                          }}>
+                            {st.role_name || 'Staff Member'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', color: 'var(--text-muted)', fontWeight: '500' }}>{st.department_name || 'General OPD'}</td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ fontWeight: '600' }}>{st.specialization || 'General Practice'}</div>
+                          {st.license_number && (
+                            <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{st.license_number}</div>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 16px', color: 'var(--text-muted)', fontSize: '0.82rem', fontFamily: 'monospace' }}>{st.phone || '+94 77 123 4567'}</td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <span className={`badge ${
+                            st.duty_status === 'on_duty' ? 'badge-success' : (st.duty_status === 'off_duty' ? 'badge-warning' : 'badge-danger')
+                          }`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', borderRadius: '20px' }}>
+                            {st.duty_status === 'on_duty' && <div className="pulse-dot" style={{ width: '6px', height: '6px' }}></div>}
+                            <span style={{ textTransform: 'capitalize' }}>{st.duty_status ? st.duty_status.replace('_', ' ') : 'On Duty'}</span>
+                          </span>
+                        </td>
+
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                              onClick={() => { setSelectedStaff(st); setShowEditStaffModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                            >
+                              <Edit size={14} />
+                              <span>Edit</span>
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedStaff(st); setShowDeleteStaffModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
+
             </div>
           </div>
         )}
@@ -3276,22 +3304,21 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 <Server size={22} color="var(--teal-accent)" />
                 <div>
                   <div style={{ fontSize: '0.95rem', fontWeight: '800' }}>MediSync Platform Operational Command</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Real-Time System Health • Node ID: MEDISYNC-PROD-LK</div>
                 </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', fontSize: '0.82rem', fontWeight: '700' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span className="pulse-dot" style={{ width: '8px', height: '8px', background: 'var(--success)', borderRadius: '50%', display: 'inline-block' }}></span>
-                  <span>Database: <strong style={{ color: 'var(--success)' }}>MySQL 8+ Online</strong></span>
+                  <span>Database: <strong style={{ color: 'var(--success)' }}>Online</strong></span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span className="pulse-dot" style={{ width: '8px', height: '8px', background: 'var(--teal-accent)', borderRadius: '50%', display: 'inline-block' }}></span>
-                  <span>AI Engine: <strong style={{ color: 'var(--teal-accent)' }}>Groq Llama 3.3 Active</strong></span>
+                  <span>AI Engine: <strong style={{ color: 'var(--teal-accent)' }}>Active</strong></span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span className="pulse-dot" style={{ width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%', display: 'inline-block' }}></span>
-                  <span>API Backend: <strong style={{ color: 'var(--primary)' }}>Laravel v11 (Port 8000)</strong></span>
+                  <span>API: <strong style={{ color: 'var(--primary)' }}>Connected</strong></span>
                 </div>
               </div>
             </div>
@@ -3341,36 +3368,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <span style={{ color: 'var(--danger)', fontWeight: '700' }}>⚠️ {expiredBatchesCount + lowBatchesCount} Low/Risk</span>
                 </div>
               </div>
-            </div>
-
-            {/* Quick Operational Shortcuts Bar */}
-            <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
-              <button onClick={() => handleTabChange('patients')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                <Users size={16} color="var(--success)" />
-                <span>Patient Records (EHR)</span>
-              </button>
-              <button onClick={() => handleTabChange('appointments')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                <Calendar size={16} color="var(--primary)" />
-                <span>Consultations</span>
-              </button>
-              <button onClick={() => handleTabChange('ai_triage')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap', borderColor: 'var(--teal-accent)', color: 'var(--teal-accent)' }}>
-                <Bot size={16} />
-                <span>Groq AI Symptom Triage</span>
-              </button>
-              <button onClick={() => handleTabChange('batches')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                <Package size={16} color="var(--warning)" />
-                <span>FEFO Batches & Movements</span>
-              </button>
-              <button onClick={() => handleTabChange('ai_risk')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                <Sparkles size={16} color="var(--danger)" />
-                <span>AI Expiry Intelligence</span>
-              </button>
-              {user.roleKey === 'super_admin' && (
-                <button onClick={() => handleTabChange('permissions')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
-                  <Key size={16} color="var(--primary)" />
-                  <span>Access Control Matrix</span>
-                </button>
-              )}
             </div>
 
             {/* Analytics Visualizations Grid 1: Donut Chart & 7-Day Trend Chart */}

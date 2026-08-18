@@ -939,16 +939,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <input type="text" className="input-field" value={supplierForm.phone} onChange={e => setSupplierForm({...supplierForm, phone: e.target.value})} placeholder="+94 11 234 5678" />
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Lead Time (Days)</label>
-                  <input type="number" className="input-field" value={supplierForm.lead_time_days} onChange={e => setSupplierForm({...supplierForm, lead_time_days: parseInt(e.target.value)})} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Supplier Rating (1-5)</label>
-                  <input type="number" step="0.1" className="input-field" value={supplierForm.rating} onChange={e => setSupplierForm({...supplierForm, rating: parseFloat(e.target.value)})} />
-                </div>
+              <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--primary)', borderLeft: '3px solid var(--primary)' }}>
+                ℹ️ Delivery Lead Time & Performance Star Rating are automatically calculated by the system based on delivery history.
               </div>
+
               <div>
                 <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Physical Address</label>
                 <input type="text" className="input-field" value={supplierForm.address} onChange={e => setSupplierForm({...supplierForm, address: e.target.value})} placeholder="45 Colombo Road, Galle" />
@@ -997,10 +991,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <input type="text" className="input-field" value={selectedSupplier.phone || ''} onChange={e => setSelectedSupplier({...selectedSupplier, phone: e.target.value})} />
                 </div>
               </div>
+              
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Lead Time (Days)</label>
-                  <input type="number" className="input-field" value={selectedSupplier.lead_time_days} onChange={e => setSelectedSupplier({...selectedSupplier, lead_time_days: parseInt(e.target.value)})} />
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Physical Address</label>
+                  <input type="text" className="input-field" value={selectedSupplier.address || ''} onChange={e => setSelectedSupplier({...selectedSupplier, address: e.target.value})} />
                 </div>
                 <div>
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
@@ -1009,6 +1004,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+
+              <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--primary)', borderLeft: '3px solid var(--primary)' }}>
+                ℹ️ Delivery Lead Time ({selectedSupplier.lead_time_days} days) & Performance Rating (⭐ {selectedSupplier.rating || '4.50'}) are auto-calculated by system algorithms.
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>

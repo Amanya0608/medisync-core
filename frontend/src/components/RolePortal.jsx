@@ -52,6 +52,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [showRecordTransactionModal, setShowRecordTransactionModal] = useState(false);
   const [selectedBatch, setSelectedBatch] = useState(null);
 
+  // AI Expiry Risk & Inventory Intelligence State
+  const [aiRiskSearch, setAiRiskSearch] = useState('');
+  const [aiRiskFilter, setAiRiskFilter] = useState('all');
+  const [isGeneratingAiRisk, setIsGeneratingAiRisk] = useState(false);
+
+
 
   // Appointments CRUD State
   const [appointmentSearch, setAppointmentSearch] = useState('');
@@ -257,12 +263,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchPrescriptionsData();
       fetchBatchesData();
       fetchTransactionsData();
-
-      const aiRes = await fetch('/api/v1/ai/inventory-risk');
-      if (aiRes.ok) setAiRiskData(await aiRes.json());
+      fetchAiRiskData();
 
       fetchStaffData();
       fetchSuppliersData();
+
 
       if (user.roleKey === 'super_admin') {
         fetchAdminUsersData();
@@ -294,6 +299,41 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       console.error('Transactions fetch error:', err);
     }
   };
+
+  const fetchAiRiskData = async () => {
+    try {
+      const res = await fetch('/api/v1/ai/inventory-risk');
+      if (res.ok) setAiRiskData(await res.json());
+    } catch (err) {
+      console.error('AI Risk fetch error:', err);
+    }
+  };
+
+  const handleTriggerAiInventoryAnalysis = async () => {
+    setIsGeneratingAiRisk(true);
+    try {
+      const res = await fetch('/api/v1/ai/generate-inventory-insights', { method: 'POST' });
+      if (res.ok) {
+        const data = await res.json();
+        setAiRiskData(data.insights || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+    setIsGeneratingAiRisk(false);
+  };
+
+  const handleDeleteAiRiskInsight = async (id) => {
+    try {
+      const res = await fetch(`/api/v1/ai/inventory-risk/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchAiRiskData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
 
 
   const fetchPrescriptionsData = async () => {
@@ -1248,6 +1288,27 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     if (batchStatusFilter === 'all') return matchesSearch;
     return matchesSearch && b.status === batchStatusFilter;
   });
+
+  const filteredAiRiskData = aiRiskData.filter(item => {
+    const matchesSearch = 
+      (item.brand_name && item.brand_name.toLowerCase().includes(aiRiskSearch.toLowerCase())) ||
+      (item.generic_name && item.generic_name.toLowerCase().includes(aiRiskSearch.toLowerCase())) ||
+      (item.batch_number && item.batch_number.toLowerCase().includes(aiRiskSearch.toLowerCase())) ||
+      (item.ai_recommendation && item.ai_recommendation.toLowerCase().includes(aiRiskSearch.toLowerCase()));
+
+    const score = parseFloat(item.expiry_risk_score) || 0;
+    if (aiRiskFilter === 'critical') return matchesSearch && score >= 80;
+    if (aiRiskFilter === 'moderate') return matchesSearch && score >= 40 && score < 80;
+    if (aiRiskFilter === 'low') return matchesSearch && score < 40;
+    return matchesSearch;
+  });
+
+  const criticalRiskCount = aiRiskData.filter(i => (parseFloat(i.expiry_risk_score) || 0) >= 80).length;
+  const totalPredictedDemand = aiRiskData.reduce((acc, curr) => acc + (parseInt(curr.predicted_demand_30d) || 0), 0);
+  const avgAiConfidence = aiRiskData.length > 0
+    ? (aiRiskData.reduce((acc, curr) => acc + (parseFloat(curr.confidence_score) || 0), 0) / aiRiskData.length).toFixed(1)
+    : '95.0';
+
 
   const filteredTransactions = transactionsList.filter(t => {
     const matchesSearch = 
@@ -2833,28 +2894,167 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
-        {/* AI Expiry Risk Tab */}
+        {/* TAB: AI EXPIRY & FEFO RISK (POWERED BY GROQ AI) */}
         {activeTab === 'ai_risk' && (
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Sparkles size={22} color="var(--primary)" />
-              AI-Driven FEFO Expiry & Demand Forecasts
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {aiRiskData.map(item => (
-                <div key={item.id} className="glass-panel" style={{ padding: '20px', borderLeft: '5px solid var(--danger)' }}>
-                  <h4 style={{ fontSize: '1.1rem', fontWeight: '700' }}>{item.brand_name} ({item.generic_name})</h4>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '4px 0 12px' }}>
-                    Batch: <strong>{item.batch_number}</strong> • Expiry Date: <strong style={{ color: 'var(--warning)' }}>{item.exp_date}</strong> • Expiry Risk Score: <strong style={{ color: 'var(--danger)' }}>{item.expiry_risk_score}%</strong>
-                  </div>
-                  <div style={{ background: 'rgba(0,0,0,0.2)', padding: '14px', borderRadius: '10px', fontSize: '0.88rem' }}>
-                    <strong>AI Recommendation:</strong> {item.ai_recommendation}
-                  </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL AI INSIGHTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{aiRiskData.length} Evaluations</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CRITICAL EXPIRY RISKS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{criticalRiskCount} High Risk</span>
                 </div>
-              ))}
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>30-DAY DEMAND FORECAST</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{totalPredictedDemand} Units</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>GROQ AI CONFIDENCE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{avgAiConfidence}% Avg</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search AI insights by medicine name, batch number, or clinical recommendation..." 
+                  value={aiRiskSearch}
+                  onChange={e => setAiRiskSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                {[
+                  { id: 'all', label: 'All Risks' },
+                  { id: 'critical', label: 'Critical (>80%)' },
+                  { id: 'moderate', label: 'Moderate (50-80%)' },
+                  { id: 'low', label: 'Low Risk (<50%)' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setAiRiskFilter(f.id)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      background: aiRiskFilter === f.id ? 'var(--primary)' : 'transparent',
+                      color: aiRiskFilter === f.id ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button 
+                onClick={handleTriggerAiInventoryAnalysis} 
+                className="btn btn-primary" 
+                disabled={isGeneratingAiRisk}
+                style={{ flexShrink: 0 }}
+              >
+                <Sparkles size={18} className={isGeneratingAiRisk ? 'pulse-dot' : ''} />
+                <span>{isGeneratingAiRisk ? 'Groq AI Analyzing FEFO Stock...' : '⚡ Run Groq AI Inventory Analysis'}</span>
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {filteredAiRiskData.map(item => {
+                const riskScore = parseFloat(item.expiry_risk_score) || 0;
+                const isCritical = riskScore >= 80;
+                const isModerate = riskScore >= 40 && riskScore < 80;
+                const borderColor = isCritical ? 'var(--danger)' : (isModerate ? 'var(--warning)' : 'var(--success)');
+
+                return (
+                  <div key={item.id} className="glass-panel" style={{ padding: '22px', borderLeft: `6px solid ${borderColor}`, display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <h3 style={{ fontSize: '1.2rem', fontWeight: '800' }}>{item.brand_name}</h3>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>({item.generic_name}) • {item.dosage_form || 'Tablet'}</span>
+                        </div>
+                        <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '4px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                          <span>FEFO Batch: <strong style={{ color: 'var(--primary)', fontFamily: 'monospace' }}>{item.batch_number || 'BATCH-001'}</strong></span>
+                          <span>• Expiry Date: <strong style={{ color: isCritical ? 'var(--danger)' : 'var(--warning)' }}>{item.exp_date || 'N/A'}</strong></span>
+                          <span>• Current Stock: <strong style={{ color: 'var(--teal-accent)' }}>{item.current_quantity} {item.unit || 'pcs'}</strong></span>
+                          <span>• Storage: <strong>{item.storage_location || 'Main Shelf'}</strong></span>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: '700' }}>EXPIRY RISK SCORE</div>
+                          <div style={{ fontSize: '1.4rem', fontWeight: '800', color: borderColor }}>
+                            {riskScore.toFixed(1)}%
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => handleDeleteAiRiskInsight(item.id)}
+                          className="btn btn-secondary" 
+                          style={{ padding: '6px 8px', color: 'var(--danger)' }}
+                          title="Delete AI Insight Record"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Risk Progress Bar */}
+                    <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{
+                        width: `${Math.min(100, Math.max(5, riskScore))}%`,
+                        height: '100%',
+                        background: isCritical ? 'linear-gradient(90deg, #f59e0b, #ef4444)' : (isModerate ? 'var(--warning)' : 'var(--success)'),
+                        borderRadius: '4px',
+                        transition: 'width 0.5s ease'
+                      }}></div>
+                    </div>
+
+                    {/* Metrics Forecast Grid */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', background: 'rgba(0,0,0,0.15)', padding: '12px 16px', borderRadius: '10px', fontSize: '0.82rem' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Predicted 30-Day Demand:</span>
+                        <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--teal-accent)' }}>{item.predicted_demand_30d} {item.unit || 'units'}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Recommended Reorder Qty:</span>
+                        <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--primary)' }}>{item.recommended_reorder_qty} {item.unit || 'units'}</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Groq AI Confidence:</span>
+                        <div style={{ fontWeight: '800', fontSize: '1rem', color: 'var(--success)' }}>{item.confidence_score}%</div>
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>Supplier Contact:</span>
+                        <div style={{ fontWeight: '700' }}>{item.supplier_name || 'Central Hospital Supply'}</div>
+                      </div>
+                    </div>
+
+                    {/* AI Recommendation Box */}
+                    <div style={{ background: 'rgba(99, 102, 241, 0.1)', borderLeft: '4px solid var(--primary)', padding: '14px', borderRadius: '8px', fontSize: '0.88rem', lineHeight: '1.5' }}>
+                      <strong style={{ color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
+                        <Sparkles size={16} />
+                        <span>Groq AI Clinical Inventory Action Plan:</span>
+                      </strong>
+                      <p style={{ margin: 0, color: 'var(--text-main)' }}>{item.ai_recommendation}</p>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
+
 
         {/* TAB: FEFO STOCK BATCHES & INVENTORY TRANSACTIONS */}
         {activeTab === 'batches' && (

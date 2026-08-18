@@ -860,6 +860,82 @@ Route::delete('/v1/patients/{id}', function ($id) {
     return response()->json(['success' => true, 'message' => 'Patient EHR record removed successfully.']);
 });
 
+// Medicine Categories CRUD API Endpoints
+Route::get('/v1/medicine-categories', function () {
+    $categories = DB::table('medicine_categories')
+        ->select('medicine_categories.*')
+        ->selectRaw('(SELECT COUNT(*) FROM medicines WHERE medicines.category_id = medicine_categories.id) as medicines_count')
+        ->orderBy('id', 'desc')
+        ->get();
+    return response()->json($categories);
+});
+
+Route::post('/v1/medicine-categories', function (Request $request) {
+    $name = trim($request->input('name'));
+    $desc = trim($request->input('description', ''));
+
+    if (empty($name)) {
+        return response()->json(['success' => false, 'message' => 'Category name is required.'], 422);
+    }
+
+    $id = DB::table('medicine_categories')->insertGetId([
+        'name' => $name,
+        'description' => $desc,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'CREATE_MEDICINE_CATEGORY',
+        'entity_type' => 'MedicineCategory',
+        'entity_id' => $id,
+        'payload' => json_encode(['name' => $name]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'id' => $id, 'message' => 'Medicine category created successfully.'], 201);
+});
+
+Route::put('/v1/medicine-categories/{id}', function (Request $request, $id) {
+    $name = trim($request->input('name'));
+    $desc = trim($request->input('description'));
+
+    $cat = DB::table('medicine_categories')->where('id', $id)->first();
+    if (!$cat) {
+        return response()->json(['success' => false, 'message' => 'Category not found.'], 404);
+    }
+
+    DB::table('medicine_categories')->where('id', $id)->update([
+        'name' => $name,
+        'description' => $desc,
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'UPDATE_MEDICINE_CATEGORY',
+        'entity_type' => 'MedicineCategory',
+        'entity_id' => $id,
+        'payload' => json_encode(['name' => $name]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Medicine category updated successfully.']);
+});
+
+Route::delete('/v1/medicine-categories/{id}', function ($id) {
+    DB::table('medicine_categories')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'DELETE_MEDICINE_CATEGORY',
+        'entity_type' => 'MedicineCategory',
+        'entity_id' => $id,
+        'payload' => json_encode(['deleted_category_id' => $id]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Medicine category removed successfully.']);
+});
+
 Route::get('/v1/medicines', function () {
     $medicines = DB::table('medicines')
         ->join('medicine_categories', 'medicines.category_id', '=', 'medicine_categories.id')

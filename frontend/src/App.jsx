@@ -14,7 +14,8 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState('light');
+
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('medisync_user');
     if (saved) {

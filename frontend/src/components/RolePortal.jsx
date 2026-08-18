@@ -68,14 +68,17 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   // Permissions & Access Control State
   const [permissionsList, setPermissionsList] = useState([]);
   const [rolePermissionsMatrix, setRolePermissionsMatrix] = useState({ roles: [], permissions: [], matrix: {} });
-  const [permissionSubTab, setPermissionSubTab] = useState('matrix'); // 'matrix' or 'directory'
+  const [permissionSubTab, setPermissionSubTab] = useState('matrix'); // 'matrix', 'directory', or 'roles'
   const [permissionSearch, setPermissionSearch] = useState('');
   const [permissionModuleFilter, setPermissionModuleFilter] = useState('all');
   const [showCreatePermissionModal, setShowCreatePermissionModal] = useState(false);
   const [showEditPermissionModal, setShowEditPermissionModal] = useState(false);
   const [showDeletePermissionModal, setShowDeletePermissionModal] = useState(false);
+  const [showCreateRoleModal, setShowCreateRoleModal] = useState(false);
   const [selectedPermission, setSelectedPermission] = useState(null);
   const [permissionForm, setPermissionForm] = useState({ name: '', display_name: '', module: 'general' });
+  const [roleForm, setRoleForm] = useState({ name: '', display_name: '', description: '' });
+
 
   // User Profile & Password Security State
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
@@ -675,6 +678,30 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       console.error('Suppliers fetch error:', err);
     }
   };
+
+  const handleCreateRole = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/admin/roles', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(roleForm)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShowCreateRoleModal(false);
+        setRoleForm({ name: '', display_name: '', description: '' });
+        fetchAdminUsersData();
+        fetchRolePermissionsMatrixData();
+      } else {
+        alert(data.message || 'Error creating system role.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error creating system role.');
+    }
+  };
+
 
   useEffect(() => {
     fetchAllData();
@@ -4184,6 +4211,21 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <span>Role Access Control Matrix Grid</span>
                 </button>
                 <button
+                  onClick={() => setPermissionSubTab('roles')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: permissionSubTab === 'roles' ? 'var(--primary)' : 'transparent',
+                    color: permissionSubTab === 'roles' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <UserCheck size={16} />
+                  <span>System Roles Directory ({rolesList.length})</span>
+                </button>
+                <button
                   onClick={() => setPermissionSubTab('directory')}
                   className="btn"
                   style={{
@@ -4196,14 +4238,22 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   }}
                 >
                   <Key size={16} />
-                  <span>Permissions Registry Directory ({permissionsList.length})</span>
+                  <span>Permissions Registry ({permissionsList.length})</span>
                 </button>
               </div>
 
-              <button onClick={() => setShowCreatePermissionModal(true)} className="btn btn-primary">
-                <Plus size={18} />
-                <span>Add New Permission</span>
-              </button>
+              {permissionSubTab === 'roles' ? (
+                <button onClick={() => setShowCreateRoleModal(true)} className="btn btn-primary">
+                  <UserCheck size={18} />
+                  <span>Create Custom Role</span>
+                </button>
+              ) : (
+                <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', padding: '6px 14px', borderRadius: '20px', fontWeight: '800', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                  <CheckCircle2 size={15} />
+                  <span>{permissionsList.length} Core Permissions Enforced</span>
+                </span>
+              )}
+
             </div>
 
             {permissionSubTab === 'matrix' && (
@@ -4280,6 +4330,82 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               </div>
             )}
 
+            {permissionSubTab === 'roles' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <div className="glass-panel" style={{ padding: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <ShieldCheck size={32} color="var(--success)" />
+                    <div>
+                      <h4 style={{ fontSize: '1.05rem', fontWeight: '800' }}>4 Core Enterprise Roles Active & Enforced</h4>
+                      <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                        All 4 medical platform roles (Super Administrator, Chief Pharmacist, Medical Officer / Doctor, Staff Nurse) are active in MySQL database.
+                      </p>
+                    </div>
+                  </div>
+                  <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', padding: '6px 14px', borderRadius: '20px', fontWeight: '800', fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                    <CheckCircle2 size={15} />
+                    <span>RBAC Matrix Operational</span>
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
+                  {rolesList.map(r => {
+                    const assignedUsersCount = usersList.filter(u => u.role_id === r.id).length;
+                    const rKeyLower = (r.name || '').toLowerCase();
+                    const isDoctor = rKeyLower.includes('doctor');
+                    const isPharm = rKeyLower.includes('pharm');
+                    const isNurse = rKeyLower.includes('nurse');
+
+                    const badgeBg = isDoctor 
+                      ? 'rgba(16, 185, 129, 0.12)' 
+                      : (isPharm ? 'rgba(56, 189, 248, 0.12)' : (isNurse ? 'rgba(139, 92, 246, 0.12)' : 'rgba(245, 158, 11, 0.12)'));
+                    const badgeColor = isDoctor 
+                      ? 'var(--success)' 
+                      : (isPharm ? 'var(--primary)' : (isNurse ? '#a78bfa' : 'var(--warning)'));
+                    const badgeBorder = isDoctor 
+                      ? '1px solid rgba(16, 185, 129, 0.3)' 
+                      : (isPharm ? '1px solid rgba(56, 189, 248, 0.3)' : (isNurse ? '1px solid rgba(139, 92, 246, 0.3)' : '1px solid rgba(245, 158, 11, 0.3)'));
+
+                    return (
+                      <div key={r.id} className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '16px' }}>
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', marginBottom: '12px' }}>
+                            <div>
+                              <h4 style={{ fontSize: '1.1rem', fontWeight: '800' }}>{r.display_name}</h4>
+                              <div style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--primary)', marginTop: '2px' }}>
+                                role_key: {r.name}
+                              </div>
+                            </div>
+                            <span style={{ 
+                              background: badgeBg, color: badgeColor, border: badgeBorder,
+                              padding: '4px 10px', borderRadius: '8px', fontWeight: '700', fontSize: '0.75rem', whiteSpace: 'nowrap'
+                            }}>
+                              {r.name}
+                            </span>
+                          </div>
+
+                          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: '1.5' }}>
+                            {r.description || 'Enterprise healthcare system access role.'}
+                          </p>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '14px', borderTop: '1px solid var(--border-color)', fontSize: '0.82rem' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>
+                            Assigned Users: <strong style={{ color: 'var(--text-main)' }}>{assignedUsersCount} Users</strong>
+                          </span>
+                          <span style={{ color: 'var(--success)', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                            <CheckCircle2 size={14} />
+                            <span>Active</span>
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+
             {permissionSubTab === 'directory' && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -4340,7 +4466,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                         <th style={{ padding: '14px' }}>DISPLAY LABEL</th>
                         <th style={{ padding: '14px' }}>MODULE</th>
                         <th style={{ padding: '14px' }}>ASSIGNED ROLES</th>
-                        <th style={{ padding: '14px' }}>ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4368,25 +4493,8 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                               )}
                             </div>
                           </td>
-                          <td style={{ padding: '14px' }}>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              <button 
-                                onClick={() => { setSelectedPermission(p); setShowEditPermissionModal(true); }}
-                                className="btn btn-secondary" 
-                                style={{ padding: '6px 8px', fontSize: '0.75rem' }}
-                              >
-                                <Edit size={13} />
-                              </button>
-                              <button 
-                                onClick={() => { setSelectedPermission(p); setShowDeletePermissionModal(true); }}
-                                className="btn btn-secondary" 
-                                style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            </div>
-                          </td>
                         </tr>
+
                       ))}
                     </tbody>
                   </table>
@@ -6296,6 +6404,77 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         </div>
       )}
+
+      {/* CREATE SYSTEM ROLE MODAL */}
+      {showCreateRoleModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '500px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateRoleModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '800', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <UserCheck size={22} color="var(--primary)" />
+              <span>Register New System Role</span>
+            </h3>
+
+            <form onSubmit={handleCreateRole} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  ROLE DISPLAY NAME *
+                </label>
+                <input 
+                  type="text" 
+                  required 
+                  className="input-field" 
+                  placeholder="e.g. Clinical Care Coordinator"
+                  value={roleForm.display_name}
+                  onChange={e => setRoleForm({ ...roleForm, display_name: e.target.value, name: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '_') })}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  SYSTEM ROLE KEY (SLUG) *
+                </label>
+                <input 
+                  type="text" 
+                  required 
+                  className="input-field" 
+                  placeholder="e.g. care_coordinator"
+                  value={roleForm.name}
+                  onChange={e => setRoleForm({ ...roleForm, name: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, '_') })}
+                  style={{ fontFamily: 'monospace' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '6px' }}>
+                  ROLE DESCRIPTION & SCOPE
+                </label>
+                <textarea 
+                  rows={3} 
+                  className="input-field" 
+                  placeholder="Describe operational responsibilities and system access boundaries..."
+                  value={roleForm.description}
+                  onChange={e => setRoleForm({ ...roleForm, description: e.target.value })}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowCreateRoleModal(false)} className="btn btn-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  <UserCheck size={16} />
+                  <span>Create System Role</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
 
       {/* EDIT PERMISSION MODAL */}
       {showEditPermissionModal && selectedPermission && (

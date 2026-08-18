@@ -14,6 +14,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
   const getTabFromPath = (pathname) => {
     if (pathname.includes('/dashboard/users')) return 'users';
+    if (pathname.includes('/dashboard/staff')) return 'staff';
+    if (pathname.includes('/dashboard/medicines')) return 'medicines';
+    if (pathname.includes('/dashboard/categories')) return 'categories';
     if (pathname.includes('/dashboard/suppliers')) return 'suppliers';
     if (pathname.includes('/dashboard/ai-risk')) return 'ai_risk';
     if (pathname.includes('/dashboard/batches')) return 'batches';
@@ -34,11 +37,39 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [aiTriageLogs, setAiTriageLogs] = useState([]);
   const [appointments, setAppointments] = useState([]);
 
-  // Super Admin Users CRUD State
+  // Super Admin Users State
   const [usersList, setUsersList] = useState([]);
   const [rolesList, setRolesList] = useState([]);
   const [departmentsList, setDepartmentsList] = useState([]);
   const [userSearch, setUserSearch] = useState('');
+
+  // Staff Roster CRUD State
+  const [staffList, setStaffList] = useState([]);
+  const [staffSearch, setStaffSearch] = useState('');
+  const [dutyFilter, setDutyFilter] = useState('all');
+
+  // Patients CRUD State
+  const [patientSearch, setPatientSearch] = useState('');
+  const [showCreatePatientModal, setShowCreatePatientModal] = useState(false);
+  const [showEditPatientModal, setShowEditPatientModal] = useState(false);
+  const [showDeletePatientModal, setShowDeletePatientModal] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState(null);
+
+  // Medicine Categories State
+  const [categoriesList, setCategoriesList] = useState([]);
+  const [categorySearch, setCategorySearch] = useState('');
+  const [showCreateCategoryModal, setShowCreateCategoryModal] = useState(false);
+  const [showEditCategoryModal, setShowEditCategoryModal] = useState(false);
+  const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+
+  // Medicines Formulary CRUD State
+  const [medicinesList, setMedicinesList] = useState([]);
+  const [medicineSearch, setMedicineSearch] = useState('');
+  const [showCreateMedicineModal, setShowCreateMedicineModal] = useState(false);
+  const [showEditMedicineModal, setShowEditMedicineModal] = useState(false);
+  const [showDeleteMedicineModal, setShowDeleteMedicineModal] = useState(false);
+  const [selectedMedicine, setSelectedMedicine] = useState(null);
 
   // Suppliers CRUD State
   const [suppliersList, setSuppliersList] = useState([]);
@@ -52,6 +83,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [showDeleteUserModal, setShowDeleteUserModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
 
+  // Staff Modals
+  const [showCreateStaffModal, setShowCreateStaffModal] = useState(false);
+  const [showEditStaffModal, setShowEditStaffModal] = useState(false);
+  const [showDeleteStaffModal, setShowDeleteStaffModal] = useState(false);
+  const [selectedStaff, setSelectedStaff] = useState(null);
+
   // Supplier Modals
   const [showCreateSupplierModal, setShowCreateSupplierModal] = useState(false);
   const [showEditSupplierModal, setShowEditSupplierModal] = useState(false);
@@ -62,6 +99,35 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [userForm, setUserForm] = useState({
     name: '', email: '', password: 'password123', role_id: 2,
     department_id: 1, phone: '+94 77 123 4567', status: 'active', specialization: 'General Care'
+  });
+
+  // Staff Creation Form State
+  const [staffForm, setStaffForm] = useState({
+    first_name: '', last_name: '', email: '', password: 'password123',
+    role_id: 3, department_id: 1, specialization: 'General Medicine',
+    license_number: 'SLMC-MED-' + Math.floor(1000 + Math.random() * 9000),
+    phone: '+94 77 123 4567', duty_status: 'on_duty', employee_code: ''
+  });
+
+  // Patient Creation Form State
+  const [patientForm, setPatientForm] = useState({
+    first_name: '', last_name: '', dob: '1995-04-12', gender: 'Female',
+    nic_passport: '199564501988', phone: '+94 77 555 1234', email: '',
+    blood_group: 'O+', emergency_contact_name: 'Saman Jayasinghe',
+    emergency_contact_phone: '+94 71 888 9999', allergies: 'Penicillin',
+    medical_history: 'Hypertension (Controlled)'
+  });
+
+  // Category Creation Form State
+  const [categoryForm, setCategoryForm] = useState({
+    name: '', description: ''
+  });
+
+  // Medicine Creation Form State
+  const [medicineForm, setMedicineForm] = useState({
+    brand_name: '', generic_name: '', category_id: 1, dosage_form: 'Tablet',
+    unit: 'pcs', min_reorder_level: 100, max_stock_capacity: 5000,
+    unit_price: 35.00, prescription_required: true, status: 'active', barcode: ''
   });
 
   // Supplier Creation Form State
@@ -81,6 +147,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setActiveTab(tabId);
     let path = '/dashboard/overview';
     if (tabId === 'users') path = '/dashboard/users';
+    else if (tabId === 'staff') path = '/dashboard/staff';
+    else if (tabId === 'medicines') path = '/dashboard/medicines';
+    else if (tabId === 'categories') path = '/dashboard/categories';
     else if (tabId === 'suppliers') path = '/dashboard/suppliers';
     else if (tabId === 'ai_risk') path = '/dashboard/ai-risk';
     else if (tabId === 'batches') path = '/dashboard/batches';
@@ -97,8 +166,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       const statusRes = await fetch('/api/status');
       if (statusRes.ok) setBackendStatus({ loading: false, online: true, data: await statusRes.json() });
 
-      const patientsRes = await fetch('/api/v1/patients');
-      if (patientsRes.ok) setPatients(await patientsRes.json());
+      fetchPatientsData();
+      fetchCategoriesData();
+      fetchMedicinesData();
 
       const batchesRes = await fetch('/api/v1/batches');
       if (batchesRes.ok) setBatches(await batchesRes.json());
@@ -112,6 +182,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       const aptsRes = await fetch('/api/v1/appointments');
       if (aptsRes.ok) setAppointments(await aptsRes.json());
 
+      fetchStaffData();
       fetchSuppliersData();
 
       if (user.roleKey === 'super_admin') {
@@ -120,6 +191,33 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } catch (err) {
       console.error('API Fetch error:', err);
       setBackendStatus({ loading: false, online: false, data: null });
+    }
+  };
+
+  const fetchPatientsData = async () => {
+    try {
+      const patientsRes = await fetch('/api/v1/patients');
+      if (patientsRes.ok) setPatients(await patientsRes.json());
+    } catch (err) {
+      console.error('Patients fetch error:', err);
+    }
+  };
+
+  const fetchCategoriesData = async () => {
+    try {
+      const res = await fetch('/api/v1/medicine-categories');
+      if (res.ok) setCategoriesList(await res.json());
+    } catch (err) {
+      console.error('Categories fetch error:', err);
+    }
+  };
+
+  const fetchMedicinesData = async () => {
+    try {
+      const res = await fetch('/api/v1/medicines');
+      if (res.ok) setMedicinesList(await res.json());
+    } catch (err) {
+      console.error('Medicines fetch error:', err);
     }
   };
 
@@ -135,6 +233,15 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       if (deptsRes.ok) setDepartmentsList(await deptsRes.json());
     } catch (err) {
       console.error('Admin fetch error:', err);
+    }
+  };
+
+  const fetchStaffData = async () => {
+    try {
+      const res = await fetch('/api/v1/admin/staff');
+      if (res.ok) setStaffList(await res.json());
+    } catch (err) {
+      console.error('Staff fetch error:', err);
     }
   };
 
@@ -157,15 +264,22 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
     if (roleKey === 'super_admin') {
       items.push({ id: 'users', label: 'User Management', icon: UserCheck });
+      items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
+      items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
+      items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
+      items.push({ id: 'patients', label: 'Patient Records (EHR)', icon: Users });
       items.push({ id: 'suppliers', label: 'Suppliers Directory', icon: Building2 });
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
       items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
       items.push({ id: 'batches', label: 'FEFO Stock Batches', icon: Package });
       items.push({ id: 'ai_triage', label: 'AI Patient Triage', icon: Bot });
-      items.push({ id: 'patients', label: 'Patients EHR', icon: Users });
       items.push({ id: 'schema', label: 'Database Architecture', icon: Database });
     } else {
       items.push({ id: 'dashboard', label: 'Dashboard Overview', icon: Activity });
+      items.push({ id: 'medicines', label: 'Medicine Formulary', icon: Pill });
+      items.push({ id: 'categories', label: 'Medicine Categories', icon: Layers });
+      items.push({ id: 'staff', label: 'Hospital Staff Roster', icon: Stethoscope });
+      items.push({ id: 'patients', label: 'Patient Records (EHR)', icon: Users });
       if (roleKey === 'pharmacist' || roleKey === 'inventory_manager') {
         items.push({ id: 'suppliers', label: 'Suppliers Directory', icon: Building2 });
         items.push({ id: 'ai_risk', label: 'AI Expiry & FEFO Risk', icon: Sparkles, badge: 'AI Engine' });
@@ -173,7 +287,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       }
       if (roleKey === 'doctor') {
         items.push({ id: 'ai_triage', label: 'AI Patient Triage', icon: Bot, badge: 'Clinical' });
-        items.push({ id: 'patients', label: 'Patients EHR', icon: Users });
         items.push({ id: 'appointments', label: 'Appointments', icon: Calendar });
       }
     }
@@ -199,6 +312,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           department_id: 1, phone: '+94 77 000 0000', status: 'active', specialization: 'General Care'
         });
         fetchAdminUsersData();
+        fetchStaffData();
       }
     } catch (err) {
       console.error(err);
@@ -218,6 +332,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         setShowEditUserModal(false);
         setSelectedUser(null);
         fetchAdminUsersData();
+        fetchStaffData();
       }
     } catch (err) {
       console.error(err);
@@ -232,6 +347,233 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         setShowDeleteUserModal(false);
         setSelectedUser(null);
         fetchAdminUsersData();
+        fetchStaffData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Staff Handlers
+  const handleCreateStaff = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/admin/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(staffForm)
+      });
+      if (res.ok) {
+        setShowCreateStaffModal(false);
+        setStaffForm({
+          first_name: '', last_name: '', email: '', password: 'password123',
+          role_id: 3, department_id: 1, specialization: 'General Medicine',
+          license_number: 'SLMC-MED-' + Math.floor(1000 + Math.random() * 9000),
+          phone: '+94 77 123 4567', duty_status: 'on_duty', employee_code: ''
+        });
+        fetchStaffData();
+        fetchAdminUsersData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateStaff = async (e) => {
+    e.preventDefault();
+    if (!selectedStaff) return;
+    try {
+      const res = await fetch(`/api/v1/admin/staff/${selectedStaff.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedStaff)
+      });
+      if (res.ok) {
+        setShowEditStaffModal(false);
+        setSelectedStaff(null);
+        fetchStaffData();
+        fetchAdminUsersData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteStaff = async () => {
+    if (!selectedStaff) return;
+    try {
+      const res = await fetch(`/api/v1/admin/staff/${selectedStaff.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteStaffModal(false);
+        setSelectedStaff(null);
+        fetchStaffData();
+        fetchAdminUsersData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Medicine Handlers
+  const handleCreateMedicine = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/medicines', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(medicineForm)
+      });
+      if (res.ok) {
+        setShowCreateMedicineModal(false);
+        setMedicineForm({
+          brand_name: '', generic_name: '', category_id: 1, dosage_form: 'Tablet',
+          unit: 'pcs', min_reorder_level: 100, max_stock_capacity: 5000,
+          unit_price: 35.00, prescription_required: true, status: 'active', barcode: ''
+        });
+        fetchMedicinesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateMedicine = async (e) => {
+    e.preventDefault();
+    if (!selectedMedicine) return;
+    try {
+      const res = await fetch(`/api/v1/medicines/${selectedMedicine.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedMedicine)
+      });
+      if (res.ok) {
+        setShowEditMedicineModal(false);
+        setSelectedMedicine(null);
+        fetchMedicinesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteMedicine = async () => {
+    if (!selectedMedicine) return;
+    try {
+      const res = await fetch(`/api/v1/medicines/${selectedMedicine.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteMedicineModal(false);
+        setSelectedMedicine(null);
+        fetchMedicinesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Patient Handlers
+  const handleCreatePatient = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patientForm)
+      });
+      if (res.ok) {
+        setShowCreatePatientModal(false);
+        setPatientForm({
+          first_name: '', last_name: '', dob: '1995-04-12', gender: 'Female',
+          nic_passport: '', phone: '+94 77 555 1234', email: '',
+          blood_group: 'O+', emergency_contact_name: '',
+          emergency_contact_phone: '', allergies: 'None',
+          medical_history: 'Routine Clinical Care'
+        });
+        fetchPatientsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdatePatient = async (e) => {
+    e.preventDefault();
+    if (!selectedPatient) return;
+    try {
+      const res = await fetch(`/api/v1/patients/${selectedPatient.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedPatient)
+      });
+      if (res.ok) {
+        setShowEditPatientModal(false);
+        setSelectedPatient(null);
+        fetchPatientsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeletePatient = async () => {
+    if (!selectedPatient) return;
+    try {
+      const res = await fetch(`/api/v1/patients/${selectedPatient.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeletePatientModal(false);
+        setSelectedPatient(null);
+        fetchPatientsData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // Category Handlers
+  const handleCreateCategory = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/medicine-categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(categoryForm)
+      });
+      if (res.ok) {
+        setShowCreateCategoryModal(false);
+        setCategoryForm({ name: '', description: '' });
+        fetchCategoriesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateCategory = async (e) => {
+    e.preventDefault();
+    if (!selectedCategory) return;
+    try {
+      const res = await fetch(`/api/v1/medicine-categories/${selectedCategory.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedCategory)
+      });
+      if (res.ok) {
+        setShowEditCategoryModal(false);
+        setSelectedCategory(null);
+        fetchCategoriesData();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!selectedCategory) return;
+    try {
+      const res = await fetch(`/api/v1/medicine-categories/${selectedCategory.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setShowDeleteCategoryModal(false);
+        setSelectedCategory(null);
+        fetchCategoriesData();
       }
     } catch (err) {
       console.error(err);
@@ -293,7 +635,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     }
   };
 
-  // Supplier Auto-Calculation Handlers
   const handleRecalculateSupplier = async (supplierId) => {
     setRecalculatingId(supplierId);
     try {
@@ -349,11 +690,57 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     (u.role_name && u.role_name.toLowerCase().includes(userSearch.toLowerCase()))
   );
 
+  const filteredStaff = staffList.filter(s => {
+    const matchesSearch = 
+      `${s.first_name} ${s.last_name}`.toLowerCase().includes(staffSearch.toLowerCase()) ||
+      s.employee_code.toLowerCase().includes(staffSearch.toLowerCase()) ||
+      (s.specialization && s.specialization.toLowerCase().includes(staffSearch.toLowerCase())) ||
+      (s.department_name && s.department_name.toLowerCase().includes(staffSearch.toLowerCase()));
+    
+    if (dutyFilter === 'all') return matchesSearch;
+    return matchesSearch && s.duty_status === dutyFilter;
+  });
+
+  const filteredMedicines = medicinesList.filter(m => 
+    m.brand_name.toLowerCase().includes(medicineSearch.toLowerCase()) ||
+    m.generic_name.toLowerCase().includes(medicineSearch.toLowerCase()) ||
+    (m.barcode && m.barcode.toLowerCase().includes(medicineSearch.toLowerCase())) ||
+    (m.category_name && m.category_name.toLowerCase().includes(medicineSearch.toLowerCase())) ||
+    (m.dosage_form && m.dosage_form.toLowerCase().includes(medicineSearch.toLowerCase()))
+  );
+
+  const filteredPatients = patients.filter(p => 
+    `${p.first_name} ${p.last_name}`.toLowerCase().includes(patientSearch.toLowerCase()) ||
+    p.patient_code.toLowerCase().includes(patientSearch.toLowerCase()) ||
+    (p.nic_passport && p.nic_passport.toLowerCase().includes(patientSearch.toLowerCase())) ||
+    (p.phone && p.phone.toLowerCase().includes(patientSearch.toLowerCase())) ||
+    (p.blood_group && p.blood_group.toLowerCase().includes(patientSearch.toLowerCase()))
+  );
+
+  const filteredCategories = categoriesList.filter(c => 
+    c.name.toLowerCase().includes(categorySearch.toLowerCase()) ||
+    (c.description && c.description.toLowerCase().includes(categorySearch.toLowerCase()))
+  );
+
   const filteredSuppliers = suppliersList.filter(s => 
     s.company_name.toLowerCase().includes(supplierSearch.toLowerCase()) ||
     s.supplier_code.toLowerCase().includes(supplierSearch.toLowerCase()) ||
     (s.contact_person && s.contact_person.toLowerCase().includes(supplierSearch.toLowerCase()))
   );
+
+  // Duty Status Counters
+  const onDutyCount = staffList.filter(s => s.duty_status === 'on_duty').length;
+  const offDutyCount = staffList.filter(s => s.duty_status === 'off_duty').length;
+  const onLeaveCount = staffList.filter(s => s.duty_status === 'on_leave').length;
+
+  // Medicine Counters
+  const rxRequiredCount = medicinesList.filter(m => m.prescription_required).length;
+
+  // Patient Counters
+  const allergyAlertCount = patients.filter(p => p.allergies && p.allergies.toLowerCase() !== 'none' && p.allergies.toLowerCase() !== 'none reported').length;
+
+  // Category Counters
+  const totalMedicinesAssigned = categoriesList.reduce((acc, curr) => acc + (parseInt(curr.medicines_count) || 0), 0);
 
   return (
     <div className="app-container">
@@ -439,7 +826,17 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
           <div>
             <h1 style={{ fontSize: '1.7rem', fontWeight: '800' }}>
-              {activeTab === 'users' ? 'User Management Directory' : (activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`)}
+              {activeTab === 'users' ? 'User Management Directory' : (
+                activeTab === 'staff' ? 'Hospital Staff Roster' : (
+                  activeTab === 'medicines' ? 'Pharmaceutical Medicine Formulary' : (
+                    activeTab === 'patients' ? 'Patient Electronic Health Records (EHR)' : (
+                      activeTab === 'categories' ? 'Pharmaceutical Medicine Categories' : (
+                        activeTab === 'suppliers' ? 'Pharmaceutical Suppliers Directory' : `Welcome back, ${user.name}`
+                      )
+                    )
+                  )
+                )
+              )}
             </h1>
             <p style={{ color: 'var(--text-muted)', marginTop: '4px', fontSize: '0.88rem' }}>
               Assigned Role: <strong style={{ color: 'var(--primary)' }}>{user.role}</strong> • Department: <strong>{user.department}</strong>
@@ -524,6 +921,482 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                           </button>
                           <button 
                             onClick={() => { setSelectedUser(u); setShowDeleteUserModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: MEDICINE FORMULARY CRUD */}
+        {activeTab === 'medicines' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* KPI Stat Cards for Medicines */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL FORMULARY MEDICINES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{medicinesList.length} Cataloged</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>PRESCRIPTION REQUIRED (Rx)</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{rxRequiredCount} Prescriptions</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CATEGORIES COVERED</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{categoriesList.length} Classifications</div>
+              </div>
+            </div>
+
+            {/* Toolbar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search by brand name, generic formula, barcode, or category..." 
+                  value={medicineSearch}
+                  onChange={e => setMedicineSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <button onClick={() => setShowCreateMedicineModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Pill size={18} />
+                <span>Add New Medicine</span>
+              </button>
+            </div>
+
+            {/* Medicines Data Table */}
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>BARCODE</th>
+                    <th style={{ padding: '14px' }}>BRAND & GENERIC NAME</th>
+                    <th style={{ padding: '14px' }}>CATEGORY</th>
+                    <th style={{ padding: '14px' }}>DOSAGE FORM</th>
+                    <th style={{ padding: '14px' }}>REORDER THRESHOLD</th>
+                    <th style={{ padding: '14px' }}>UNIT PRICE</th>
+                    <th style={{ padding: '14px' }}>RX REQUIREMENT</th>
+                    <th style={{ padding: '14px' }}>STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredMedicines.map(m => (
+                    <tr key={m.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>{m.barcode}</td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700' }}>{m.brand_name}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{m.generic_name}</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.82rem' }}>
+                          {m.category_name || 'General'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', color: 'var(--text-muted)' }}>
+                        {m.dosage_form} ({m.unit})
+                      </td>
+                      <td style={{ padding: '14px', fontWeight: '600' }}>
+                        <div>Min: <strong style={{ color: 'var(--warning)' }}>{m.min_reorder_level}</strong></div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Max: {m.max_stock_capacity}</div>
+                      </td>
+                      <td style={{ padding: '14px', fontWeight: '800', color: 'var(--success)' }}>
+                        LKR {parseFloat(m.unit_price).toFixed(2)}
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        {m.prescription_required ? (
+                          <span style={{ background: 'rgba(245, 158, 11, 0.15)', color: 'var(--warning)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                            Rx Required
+                          </span>
+                        ) : (
+                          <span style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                            OTC Available
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span className={`badge ${m.status === 'active' ? 'badge-success' : 'badge-warning'}`}>
+                          {m.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => { setSelectedMedicine(m); setShowEditMedicineModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                          >
+                            <Edit size={14} />
+                            <span>Edit</span>
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedMedicine(m); setShowDeleteMedicineModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: HOSPITAL STAFF ROSTER CRUD */}
+        {activeTab === 'staff' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL HOSPITAL STAFF</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{staffList.length}</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ON DUTY NOW</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div className="pulse-dot"></div>
+                  <span>{onDutyCount}</span>
+                </div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>OFF DUTY</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{offDutyCount}</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ON LEAVE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px' }}>{onLeaveCount}</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search staff by name, code, specialization, or ward..." 
+                  value={staffSearch}
+                  onChange={e => setStaffSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '6px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                {[
+                  { id: 'all', label: 'All Staff' },
+                  { id: 'on_duty', label: 'On Duty' },
+                  { id: 'off_duty', label: 'Off Duty' },
+                  { id: 'on_leave', label: 'On Leave' },
+                ].map(f => (
+                  <button
+                    key={f.id}
+                    onClick={() => setDutyFilter(f.id)}
+                    className="btn"
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '0.78rem',
+                      background: dutyFilter === f.id ? 'var(--primary)' : 'transparent',
+                      color: dutyFilter === f.id ? '#fff' : 'var(--text-muted)',
+                      border: 'none',
+                      borderRadius: '6px'
+                    }}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              <button onClick={() => setShowCreateStaffModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Stethoscope size={18} />
+                <span>Register New Staff</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>CODE</th>
+                    <th style={{ padding: '14px' }}>STAFF MEMBER</th>
+                    <th style={{ padding: '14px' }}>ROLE / POSITION</th>
+                    <th style={{ padding: '14px' }}>DEPARTMENT WARD</th>
+                    <th style={{ padding: '14px' }}>SPECIALIZATION & SLMC LICENSE</th>
+                    <th style={{ padding: '14px' }}>PHONE</th>
+                    <th style={{ padding: '14px' }}>DUTY STATUS</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredStaff.map(st => (
+                    <tr key={st.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>{st.employee_code}</td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '700' }}>{st.first_name} {st.last_name}</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{st.email}</div>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <span className="badge badge-primary" style={{ 
+                          borderColor: st.role_key === 'doctor' ? 'var(--success)' : (st.role_key === 'pharmacist' ? 'var(--teal-accent)' : 'var(--primary)'),
+                          color: st.role_key === 'doctor' ? 'var(--success)' : (st.role_key === 'pharmacist' ? 'var(--teal-accent)' : 'var(--primary)')
+                        }}>
+                          {st.role_name || 'Staff Member'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', color: 'var(--text-muted)' }}>{st.department_name || 'General OPD'}</td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ fontWeight: '600' }}>{st.specialization || 'General Practice'}</div>
+                        {st.license_number && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{st.license_number}</div>
+                        )}
+                      </td>
+                      <td style={{ padding: '14px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{st.phone || '+94 77 123 4567'}</td>
+                      <td style={{ padding: '14px' }}>
+                        <span className={`badge ${
+                          st.duty_status === 'on_duty' ? 'badge-success' : (st.duty_status === 'off_duty' ? 'badge-warning' : 'badge-danger')
+                        }`} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {st.duty_status === 'on_duty' && <div className="pulse-dot" style={{ width: '6px', height: '6px' }}></div>}
+                          <span style={{ textTransform: 'capitalize' }}>{st.duty_status ? st.duty_status.replace('_', ' ') : 'On Duty'}</span>
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => { setSelectedStaff(st); setShowEditStaffModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                          >
+                            <Edit size={14} />
+                            <span>Edit</span>
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedStaff(st); setShowDeleteStaffModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: PATIENT RECORDS (EHR) CRUD */}
+        {activeTab === 'patients' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL REGISTERED PATIENTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{patients.length}</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>BLOOD GROUPS LOGGED</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{patients.filter(p => p.blood_group).length} Patients</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ALLERGY RISK ALERTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <AlertTriangle size={20} />
+                  <span>{allergyAlertCount} High Risk</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search patient by name, code, NIC/Passport, phone, or blood group..." 
+                  value={patientSearch}
+                  onChange={e => setPatientSearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <button onClick={() => setShowCreatePatientModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Users size={18} />
+                <span>Register New Patient</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>PATIENT CODE</th>
+                    <th style={{ padding: '14px' }}>FULL NAME & EMAIL</th>
+                    <th style={{ padding: '14px' }}>DOB & GENDER</th>
+                    <th style={{ padding: '14px' }}>BLOOD GROUP</th>
+                    <th style={{ padding: '14px' }}>NIC / PASSPORT & PHONE</th>
+                    <th style={{ padding: '14px' }}>ALLERGIES (EHR)</th>
+                    <th style={{ padding: '14px' }}>EMERGENCY CONTACT</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPatients.map(p => {
+                    const hasAllergies = p.allergies && p.allergies.toLowerCase() !== 'none' && p.allergies.toLowerCase() !== 'none reported';
+                    return (
+                      <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>{p.patient_code}</td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ fontWeight: '700' }}>{p.first_name} {p.last_name}</div>
+                          {p.email && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{p.email}</div>}
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div>{p.dob}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.gender}</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <span style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.82rem' }}>
+                            {p.blood_group || 'O+'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px', fontSize: '0.82rem' }}>
+                          <div>{p.phone || 'N/A'}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{p.nic_passport || 'NIC Not Set'}</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          {hasAllergies ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                              <AlertTriangle size={13} />
+                              <span>{p.allergies}</span>
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>None reported</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px', fontSize: '0.82rem' }}>
+                          <div>{p.emergency_contact_name || 'N/A'}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{p.emergency_contact_phone}</div>
+                        </td>
+                        <td style={{ padding: '14px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button 
+                              onClick={() => { setSelectedPatient(p); setShowEditPatientModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                            >
+                              <Edit size={14} />
+                              <span>Edit EHR</span>
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedPatient(p); setShowDeletePatientModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: MEDICINE CATEGORIES CRUD */}
+        {activeTab === 'categories' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL CATEGORIES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{categoriesList.length} Categories</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>LINKED MEDICINES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{totalMedicinesAssigned} Medicines</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>SYSTEM STATUS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>Active Catalog</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
+                <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="Search medicine categories by name or description..." 
+                  value={categorySearch}
+                  onChange={e => setCategorySearch(e.target.value)}
+                  style={{ paddingLeft: '42px' }}
+                />
+              </div>
+
+              <button onClick={() => setShowCreateCategoryModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                <Plus size={18} />
+                <span>Add New Category</span>
+              </button>
+            </div>
+
+            <div className="glass-panel" style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                    <th style={{ padding: '14px' }}>ID</th>
+                    <th style={{ padding: '14px' }}>CATEGORY NAME</th>
+                    <th style={{ padding: '14px' }}>DESCRIPTION</th>
+                    <th style={{ padding: '14px' }}>LINKED MEDICINES</th>
+                    <th style={{ padding: '14px' }}>CREATED AT</th>
+                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredCategories.map(c => (
+                    <tr key={c.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                      <td style={{ padding: '14px', fontFamily: 'monospace', fontWeight: '700' }}>#{c.id}</td>
+                      <td style={{ padding: '14px' }}>
+                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '6px 12px', borderRadius: '8px', fontWeight: '700', fontSize: '0.88rem' }}>
+                          {c.name}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', color: 'var(--text-muted)' }}>{c.description || 'No detailed description provided.'}</td>
+                      <td style={{ padding: '14px' }}>
+                        <span className="badge badge-success">
+                          {c.medicines_count || 0} Medicines
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px', color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'monospace' }}>
+                        {c.created_at ? new Date(c.created_at).toLocaleDateString() : 'Active'}
+                      </td>
+                      <td style={{ padding: '14px' }}>
+                        <div style={{ display: 'flex', gap: '8px' }}>
+                          <button 
+                            onClick={() => { setSelectedCategory(c); setShowEditCategoryModal(true); }}
+                            className="btn btn-secondary" 
+                            style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                          >
+                            <Edit size={14} />
+                            <span>Edit</span>
+                          </button>
+                          <button 
+                            onClick={() => { setSelectedCategory(c); setShowDeleteCategoryModal(true); }}
                             className="btn btn-secondary" 
                             style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--danger)' }}
                           >
@@ -662,16 +1535,16 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 <div style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{user.role}</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>PHARMA SUPPLIERS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{suppliersList.length} Active</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>FORMULARY MEDICINES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{medicinesList.length} Cataloged</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>FEFO STOCK BATCHES</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{batches.length} Monitored</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>MEDICINE CATEGORIES</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{categoriesList.length} Categories</div>
               </div>
               <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>REGISTERED USERS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{usersList.length} Staff Users</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>REGISTERED PATIENTS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{patients.length} Patients</div>
               </div>
             </div>
           </div>
@@ -740,33 +1613,6 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
-        {/* Patients Tab */}
-        {activeTab === 'patients' && (
-          <div className="glass-panel" style={{ padding: '24px' }}>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '16px' }}>Patient Records (EHR)</h3>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                  <th style={{ padding: '12px' }}>CODE</th>
-                  <th style={{ padding: '12px' }}>NAME</th>
-                  <th style={{ padding: '12px' }}>BLOOD</th>
-                  <th style={{ padding: '12px' }}>ALLERGIES</th>
-                </tr>
-              </thead>
-              <tbody>
-                {patients.map(p => (
-                  <tr key={p.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                    <td style={{ padding: '12px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>{p.patient_code}</td>
-                    <td style={{ padding: '12px', fontWeight: '700' }}>{p.first_name} {p.last_name}</td>
-                    <td style={{ padding: '12px' }}>{p.blood_group}</td>
-                    <td style={{ padding: '12px', color: 'var(--danger)' }}>{p.allergies || 'None'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
         {/* Database Architecture Tab */}
         {activeTab === 'schema' && (
           <div className="glass-panel" style={{ padding: '24px' }}>
@@ -775,6 +1621,603 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
       </main>
+
+      {/* CREATE MEDICINE MODAL */}
+      {showCreateMedicineModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '560px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateMedicineModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Add New Medicine to Formulary</h3>
+            <form onSubmit={handleCreateMedicine} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Brand Name</label>
+                  <input type="text" className="input-field" required value={medicineForm.brand_name} onChange={e => setMedicineForm({...medicineForm, brand_name: e.target.value})} placeholder="Amoxil 500mg" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Generic Formula Name</label>
+                  <input type="text" className="input-field" required value={medicineForm.generic_name} onChange={e => setMedicineForm({...medicineForm, generic_name: e.target.value})} placeholder="Amoxicillin Trihydrate" />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Category Classification</label>
+                  <select className="input-field" value={medicineForm.category_id} onChange={e => setMedicineForm({...medicineForm, category_id: parseInt(e.target.value)})}>
+                    {categoriesList.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Dosage Form</label>
+                  <select className="input-field" value={medicineForm.dosage_form} onChange={e => setMedicineForm({...medicineForm, dosage_form: e.target.value})}>
+                    {['Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Inhaler', 'Drops'].map(df => (
+                      <option key={df} value={df}>{df}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Measurement Unit</label>
+                  <input type="text" className="input-field" value={medicineForm.unit} onChange={e => setMedicineForm({...medicineForm, unit: e.target.value})} placeholder="pcs, capsules" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Unit Price (LKR)</label>
+                  <input type="number" step="0.01" className="input-field" value={medicineForm.unit_price} onChange={e => setMedicineForm({...medicineForm, unit_price: parseFloat(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Min Reorder Level</label>
+                  <input type="number" className="input-field" value={medicineForm.min_reorder_level} onChange={e => setMedicineForm({...medicineForm, min_reorder_level: parseInt(e.target.value)})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Barcode / GTIN</label>
+                  <input type="text" className="input-field" value={medicineForm.barcode} onChange={e => setMedicineForm({...medicineForm, barcode: e.target.value})} placeholder="8901234567890" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescription Rule</label>
+                  <select className="input-field" value={medicineForm.prescription_required ? 'true' : 'false'} onChange={e => setMedicineForm({...medicineForm, prescription_required: e.target.value === 'true'})}>
+                    <option value="true">Prescription Required (Rx Only)</option>
+                    <option value="false">Over The Counter (OTC)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateMedicineModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Medicine</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MEDICINE MODAL */}
+      {showEditMedicineModal && selectedMedicine && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '560px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditMedicineModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Medicine Profile #{selectedMedicine.id}</h3>
+            <form onSubmit={handleUpdateMedicine} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Brand Name</label>
+                  <input type="text" className="input-field" required value={selectedMedicine.brand_name} onChange={e => setSelectedMedicine({...selectedMedicine, brand_name: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Generic Formula Name</label>
+                  <input type="text" className="input-field" required value={selectedMedicine.generic_name} onChange={e => setSelectedMedicine({...selectedMedicine, generic_name: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Category Classification</label>
+                  <select className="input-field" value={selectedMedicine.category_id || 1} onChange={e => setSelectedMedicine({...selectedMedicine, category_id: parseInt(e.target.value)})}>
+                    {categoriesList.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Dosage Form</label>
+                  <select className="input-field" value={selectedMedicine.dosage_form || 'Tablet'} onChange={e => setSelectedMedicine({...selectedMedicine, dosage_form: e.target.value})}>
+                    {['Tablet', 'Capsule', 'Syrup', 'Injection', 'Ointment', 'Inhaler', 'Drops'].map(df => (
+                      <option key={df} value={df}>{df}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Measurement Unit</label>
+                  <input type="text" className="input-field" value={selectedMedicine.unit || 'pcs'} onChange={e => setSelectedMedicine({...selectedMedicine, unit: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Unit Price (LKR)</label>
+                  <input type="number" step="0.01" className="input-field" value={selectedMedicine.unit_price} onChange={e => setSelectedMedicine({...selectedMedicine, unit_price: parseFloat(e.target.value)})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Min Reorder Level</label>
+                  <input type="number" className="input-field" value={selectedMedicine.min_reorder_level} onChange={e => setSelectedMedicine({...selectedMedicine, min_reorder_level: parseInt(e.target.value)})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Barcode / GTIN</label>
+                  <input type="text" className="input-field" value={selectedMedicine.barcode || ''} onChange={e => setSelectedMedicine({...selectedMedicine, barcode: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Prescription Rule</label>
+                  <select className="input-field" value={selectedMedicine.prescription_required ? 'true' : 'false'} onChange={e => setSelectedMedicine({...selectedMedicine, prescription_required: e.target.value === 'true'})}>
+                    <option value="true">Prescription Required (Rx Only)</option>
+                    <option value="false">Over The Counter (OTC)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Catalog Status</label>
+                  <select className="input-field" value={selectedMedicine.status || 'active'} onChange={e => setSelectedMedicine({...selectedMedicine, status: e.target.value})}>
+                    <option value="active">Active</option>
+                    <option value="discontinued">Discontinued</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditMedicineModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Medicine</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE MEDICINE MODAL */}
+      {showDeleteMedicineModal && selectedMedicine && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Medicine Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete medicine <strong>{selectedMedicine.brand_name}</strong> ({selectedMedicine.barcode}) from the formulary catalog?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteMedicineModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteMedicine} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Medicine</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE CATEGORY MODAL */}
+      {showCreateCategoryModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateCategoryModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Add Medicine Category</h3>
+            <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Category Name</label>
+                <input type="text" className="input-field" required value={categoryForm.name} onChange={e => setCategoryForm({...categoryForm, name: e.target.value})} placeholder="e.g. Antibiotics, Analgesics" />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Category Description</label>
+                <textarea className="input-field" rows={3} value={categoryForm.description} onChange={e => setCategoryForm({...categoryForm, description: e.target.value})} placeholder="Brief description of pharmaceutical classification..." />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateCategoryModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Category</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CATEGORY MODAL */}
+      {showEditCategoryModal && selectedCategory && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '480px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditCategoryModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Medicine Category #{selectedCategory.id}</h3>
+            <form onSubmit={handleUpdateCategory} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Category Name</label>
+                <input type="text" className="input-field" required value={selectedCategory.name} onChange={e => setSelectedCategory({...selectedCategory, name: e.target.value})} />
+              </div>
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Category Description</label>
+                <textarea className="input-field" rows={3} value={selectedCategory.description || ''} onChange={e => setSelectedCategory({...selectedCategory, description: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditCategoryModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Category</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CATEGORY MODAL */}
+      {showDeleteCategoryModal && selectedCategory && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Category Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete category <strong>{selectedCategory.name}</strong> from the system?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteCategoryModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteCategory} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Category</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE PATIENT MODAL */}
+      {showCreatePatientModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '560px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreatePatientModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Register New Patient Record (EHR)</h3>
+            <form onSubmit={handleCreatePatient} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>First Name</label>
+                  <input type="text" className="input-field" required value={patientForm.first_name} onChange={e => setPatientForm({...patientForm, first_name: e.target.value})} placeholder="Eleanor" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Last Name</label>
+                  <input type="text" className="input-field" required value={patientForm.last_name} onChange={e => setPatientForm({...patientForm, last_name: e.target.value})} placeholder="Vance" />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Date of Birth</label>
+                  <input type="date" className="input-field" required value={patientForm.dob} onChange={e => setPatientForm({...patientForm, dob: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Gender</label>
+                  <select className="input-field" value={patientForm.gender} onChange={e => setPatientForm({...patientForm, gender: e.target.value})}>
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Blood Group</label>
+                  <select className="input-field" value={patientForm.blood_group} onChange={e => setPatientForm({...patientForm, blood_group: e.target.value})}>
+                    {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map(bg => (
+                      <option key={bg} value={bg}>{bg}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>NIC / Passport No.</label>
+                  <input type="text" className="input-field" value={patientForm.nic_passport} onChange={e => setPatientForm({...patientForm, nic_passport: e.target.value})} placeholder="199564501988" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Contact Phone</label>
+                  <input type="text" className="input-field" value={patientForm.phone} onChange={e => setPatientForm({...patientForm, phone: e.target.value})} placeholder="+94 77 555 1234" />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Emergency Contact Name</label>
+                  <input type="text" className="input-field" value={patientForm.emergency_contact_name} onChange={e => setPatientForm({...patientForm, emergency_contact_name: e.target.value})} placeholder="Saman Jayasinghe" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Emergency Contact Phone</label>
+                  <input type="text" className="input-field" value={patientForm.emergency_contact_phone} onChange={e => setPatientForm({...patientForm, emergency_contact_phone: e.target.value})} placeholder="+94 71 888 9999" />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--danger)', fontWeight: '700', display: 'block', marginBottom: '4px' }}>Known Drug Allergies (EHR Alert)</label>
+                <input type="text" className="input-field" value={patientForm.allergies} onChange={e => setPatientForm({...patientForm, allergies: e.target.value})} placeholder="Penicillin, Sulfa drugs, Aspirin" />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Medical History & Conditions</label>
+                <input type="text" className="input-field" value={patientForm.medical_history} onChange={e => setPatientForm({...patientForm, medical_history: e.target.value})} placeholder="Hypertension, Mild Asthma" />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreatePatientModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Patient Record</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PATIENT MODAL */}
+      {showEditPatientModal && selectedPatient && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '560px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditPatientModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Patient EHR Profile #{selectedPatient.id}</h3>
+            <form onSubmit={handleUpdatePatient} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>First Name</label>
+                  <input type="text" className="input-field" required value={selectedPatient.first_name} onChange={e => setSelectedPatient({...selectedPatient, first_name: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Last Name</label>
+                  <input type="text" className="input-field" required value={selectedPatient.last_name} onChange={e => setSelectedPatient({...selectedPatient, last_name: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Date of Birth</label>
+                  <input type="date" className="input-field" required value={selectedPatient.dob || '1995-01-01'} onChange={e => setSelectedPatient({...selectedPatient, dob: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Gender</label>
+                  <select className="input-field" value={selectedPatient.gender || 'Female'} onChange={e => setSelectedPatient({...selectedPatient, gender: e.target.value})}>
+                    <option value="Female">Female</option>
+                    <option value="Male">Male</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Blood Group</label>
+                  <select className="input-field" value={selectedPatient.blood_group || 'O+'} onChange={e => setSelectedPatient({...selectedPatient, blood_group: e.target.value})}>
+                    {['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'].map(bg => (
+                      <option key={bg} value={bg}>{bg}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>NIC / Passport No.</label>
+                  <input type="text" className="input-field" value={selectedPatient.nic_passport || ''} onChange={e => setSelectedPatient({...selectedPatient, nic_passport: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Contact Phone</label>
+                  <input type="text" className="input-field" value={selectedPatient.phone || ''} onChange={e => setSelectedPatient({...selectedPatient, phone: e.target.value})} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--danger)', fontWeight: '700', display: 'block', marginBottom: '4px' }}>Known Drug Allergies (EHR Alert)</label>
+                <input type="text" className="input-field" value={selectedPatient.allergies || ''} onChange={e => setSelectedPatient({...selectedPatient, allergies: e.target.value})} />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Medical History & Conditions</label>
+                <input type="text" className="input-field" value={selectedPatient.medical_history || ''} onChange={e => setSelectedPatient({...selectedPatient, medical_history: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditPatientModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update EHR Record</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE PATIENT MODAL */}
+      {showDeletePatientModal && selectedPatient && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Patient EHR Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete patient health record <strong>{selectedPatient.first_name} {selectedPatient.last_name}</strong> ({selectedPatient.patient_code}) from the system?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeletePatientModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeletePatient} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Patient EHR</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE STAFF MODAL */}
+      {showCreateStaffModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCreateStaffModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Register New Hospital Staff Member</h3>
+            <form onSubmit={handleCreateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>First Name</label>
+                  <input type="text" className="input-field" required value={staffForm.first_name} onChange={e => setStaffForm({...staffForm, first_name: e.target.value})} placeholder="Dr. Aris" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Last Name</label>
+                  <input type="text" className="input-field" required value={staffForm.last_name} onChange={e => setStaffForm({...staffForm, last_name: e.target.value})} placeholder="Thorne" />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Work Email Address</label>
+                  <input type="email" className="input-field" required value={staffForm.email} onChange={e => setStaffForm({...staffForm, email: e.target.value})} placeholder="thorne@medisync.health" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Password</label>
+                  <input type="password" className="input-field" required value={staffForm.password} onChange={e => setStaffForm({...staffForm, password: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Assign System Role</label>
+                  <select className="input-field" value={staffForm.role_id} onChange={e => setStaffForm({...staffForm, role_id: parseInt(e.target.value)})}>
+                    {rolesList.map(r => (
+                      <option key={r.id} value={r.id}>{r.display_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Ward</label>
+                  <select className="input-field" value={staffForm.department_id} onChange={e => setStaffForm({...staffForm, department_id: parseInt(e.target.value)})}>
+                    {departmentsList.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Specialization</label>
+                  <input type="text" className="input-field" value={staffForm.specialization} onChange={e => setStaffForm({...staffForm, specialization: e.target.value})} placeholder="Senior Cardiologist" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>SLMC License Number</label>
+                  <input type="text" className="input-field" value={staffForm.license_number} onChange={e => setStaffForm({...staffForm, license_number: e.target.value})} placeholder="SLMC-MED-98712" />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Contact Phone</label>
+                  <input type="text" className="input-field" value={staffForm.phone} onChange={e => setStaffForm({...staffForm, phone: e.target.value})} placeholder="+94 71 987 6543" />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Duty Status</label>
+                  <select className="input-field" value={staffForm.duty_status} onChange={e => setStaffForm({...staffForm, duty_status: e.target.value})}>
+                    <option value="on_duty">On Duty</option>
+                    <option value="off_duty">Off Duty</option>
+                    <option value="on_leave">On Leave</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowCreateStaffModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Staff Member</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT STAFF MODAL */}
+      {showEditStaffModal && selectedStaff && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowEditStaffModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: '700', marginBottom: '20px' }}>Edit Staff Profile #{selectedStaff.id}</h3>
+            <form onSubmit={handleUpdateStaff} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>First Name</label>
+                  <input type="text" className="input-field" required value={selectedStaff.first_name} onChange={e => setSelectedStaff({...selectedStaff, first_name: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Last Name</label>
+                  <input type="text" className="input-field" required value={selectedStaff.last_name} onChange={e => setSelectedStaff({...selectedStaff, last_name: e.target.value})} />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Department Ward</label>
+                  <select className="input-field" value={selectedStaff.department_id || 1} onChange={e => setSelectedStaff({...selectedStaff, department_id: parseInt(e.target.value)})}>
+                    {departmentsList.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Duty Status</label>
+                  <select className="input-field" value={selectedStaff.duty_status || 'on_duty'} onChange={e => setSelectedStaff({...selectedStaff, duty_status: e.target.value})}>
+                    <option value="on_duty">On Duty</option>
+                    <option value="off_duty">Off Duty</option>
+                    <option value="on_leave">On Leave</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Specialization</label>
+                  <input type="text" className="input-field" value={selectedStaff.specialization || ''} onChange={e => setSelectedStaff({...selectedStaff, specialization: e.target.value})} />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>SLMC License Number</label>
+                  <input type="text" className="input-field" value={selectedStaff.license_number || ''} onChange={e => setSelectedStaff({...selectedStaff, license_number: e.target.value})} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Contact Phone</label>
+                <input type="text" className="input-field" value={selectedStaff.phone || ''} onChange={e => setSelectedStaff({...selectedStaff, phone: e.target.value})} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>
+                <button type="button" onClick={() => setShowEditStaffModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary">Update Staff Profile</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE STAFF MODAL */}
+      {showDeleteStaffModal && selectedStaff && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '440px', padding: '28px', textAlign: 'center' }}>
+            <Trash2 size={40} color="var(--danger)" style={{ margin: '0 auto 12px' }} />
+            <h3 style={{ fontSize: '1.2rem', fontWeight: '700', marginBottom: '8px' }}>Confirm Staff Deletion</h3>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              Are you sure you want to delete staff profile <strong>{selectedStaff.first_name} {selectedStaff.last_name}</strong> ({selectedStaff.employee_code}) from the system?
+            </p>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button onClick={() => setShowDeleteStaffModal(false)} className="btn btn-secondary">Cancel</button>
+              <button onClick={handleDeleteStaff} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Staff Profile</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* CREATE USER MODAL */}
       {showCreateUserModal && (
@@ -939,16 +2382,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <input type="text" className="input-field" value={supplierForm.phone} onChange={e => setSupplierForm({...supplierForm, phone: e.target.value})} placeholder="+94 11 234 5678" />
                 </div>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Lead Time (Days)</label>
-                  <input type="number" className="input-field" value={supplierForm.lead_time_days} onChange={e => setSupplierForm({...supplierForm, lead_time_days: parseInt(e.target.value)})} />
-                </div>
-                <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Supplier Rating (1-5)</label>
-                  <input type="number" step="0.1" className="input-field" value={supplierForm.rating} onChange={e => setSupplierForm({...supplierForm, rating: parseFloat(e.target.value)})} />
-                </div>
+              <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--primary)', borderLeft: '3px solid var(--primary)' }}>
+                ℹ️ Delivery Lead Time & Performance Star Rating are automatically calculated by the system based on delivery history.
               </div>
+
               <div>
                 <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Physical Address</label>
                 <input type="text" className="input-field" value={supplierForm.address} onChange={e => setSupplierForm({...supplierForm, address: e.target.value})} placeholder="45 Colombo Road, Galle" />
@@ -997,10 +2434,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <input type="text" className="input-field" value={selectedSupplier.phone || ''} onChange={e => setSelectedSupplier({...selectedSupplier, phone: e.target.value})} />
                 </div>
               </div>
+              
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Lead Time (Days)</label>
-                  <input type="number" className="input-field" value={selectedSupplier.lead_time_days} onChange={e => setSelectedSupplier({...selectedSupplier, lead_time_days: parseInt(e.target.value)})} />
+                  <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Physical Address</label>
+                  <input type="text" className="input-field" value={selectedSupplier.address || ''} onChange={e => setSelectedSupplier({...selectedSupplier, address: e.target.value})} />
                 </div>
                 <div>
                   <label style={{ fontSize: '0.82rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>Status</label>
@@ -1009,6 +2447,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                     <option value="inactive">Inactive</option>
                   </select>
                 </div>
+              </div>
+
+              <div style={{ background: 'rgba(56, 189, 248, 0.1)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.8rem', color: 'var(--primary)', borderLeft: '3px solid var(--primary)' }}>
+                ℹ️ Delivery Lead Time ({selectedSupplier.lead_time_days} days) & Performance Rating (⭐ {selectedSupplier.rating || '4.50'}) are auto-calculated by system algorithms.
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '12px' }}>

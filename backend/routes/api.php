@@ -936,12 +936,118 @@ Route::delete('/v1/medicine-categories/{id}', function ($id) {
     return response()->json(['success' => true, 'message' => 'Medicine category removed successfully.']);
 });
 
+// Medicines Formulary CRUD API Endpoints
 Route::get('/v1/medicines', function () {
     $medicines = DB::table('medicines')
         ->join('medicine_categories', 'medicines.category_id', '=', 'medicine_categories.id')
         ->select('medicines.*', 'medicine_categories.name as category_name')
+        ->selectRaw('(SELECT COALESCE(SUM(current_quantity), 0) FROM medicine_batches WHERE medicine_batches.medicine_id = medicines.id) as total_stock')
+        ->selectRaw('(SELECT COUNT(*) FROM medicine_batches WHERE medicine_batches.medicine_id = medicines.id) as batches_count')
+        ->orderBy('medicines.id', 'desc')
         ->get();
     return response()->json($medicines);
+});
+
+Route::post('/v1/medicines', function (Request $request) {
+    $brandName = trim($request->input('brand_name'));
+    $genericName = trim($request->input('generic_name'));
+    $categoryId = (int)$request->input('category_id', 1);
+    $dosageForm = trim($request->input('dosage_form', 'Tablet'));
+    $unit = trim($request->input('unit', 'pcs'));
+    $minReorder = (int)$request->input('min_reorder_level', 100);
+    $maxCapacity = (int)$request->input('max_stock_capacity', 5000);
+    $unitPrice = (float)$request->input('unit_price', 0.00);
+    $rxRequired = filter_var($request->input('prescription_required', true), FILTER_VALIDATE_BOOLEAN);
+    $status = $request->input('status', 'active');
+    $barcode = trim($request->input('barcode')) ?: ('890' . rand(100000009, 999999999));
+
+    if (empty($brandName) || empty($genericName)) {
+        return response()->json(['success' => false, 'message' => 'Brand name and generic name are required.'], 422);
+    }
+
+    $id = DB::table('medicines')->insertGetId([
+        'category_id' => $categoryId,
+        'barcode' => $barcode,
+        'generic_name' => $genericName,
+        'brand_name' => $brandName,
+        'dosage_form' => $dosageForm,
+        'unit' => $unit,
+        'min_reorder_level' => $minReorder,
+        'max_stock_capacity' => $maxCapacity,
+        'unit_price' => $unitPrice,
+        'prescription_required' => $rxRequired,
+        'status' => $status,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'CREATE_MEDICINE',
+        'entity_type' => 'Medicine',
+        'entity_id' => $id,
+        'payload' => json_encode(['brand_name' => $brandName, 'generic_name' => $genericName]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'id' => $id, 'message' => 'Medicine added to formulary successfully.'], 201);
+});
+
+Route::put('/v1/medicines/{id}', function (Request $request, $id) {
+    $med = DB::table('medicines')->where('id', $id)->first();
+    if (!$med) {
+        return response()->json(['success' => false, 'message' => 'Medicine not found.'], 404);
+    }
+
+    $brandName = trim($request->input('brand_name', $med->brand_name));
+    $genericName = trim($request->input('generic_name', $med->generic_name));
+    $categoryId = (int)$request->input('category_id', $med->category_id);
+    $dosageForm = trim($request->input('dosage_form', $med->dosage_form));
+    $unit = trim($request->input('unit', $med->unit));
+    $minReorder = (int)$request->input('min_reorder_level', $med->min_reorder_level);
+    $maxCapacity = (int)$request->input('max_stock_capacity', $med->max_stock_capacity);
+    $unitPrice = (float)$request->input('unit_price', $med->unit_price);
+    $rxRequired = filter_var($request->input('prescription_required', $med->prescription_required), FILTER_VALIDATE_BOOLEAN);
+    $status = $request->input('status', $med->status);
+    $barcode = trim($request->input('barcode', $med->barcode));
+
+    DB::table('medicines')->where('id', $id)->update([
+        'category_id' => $categoryId,
+        'barcode' => $barcode,
+        'generic_name' => $genericName,
+        'brand_name' => $brandName,
+        'dosage_form' => $dosageForm,
+        'unit' => $unit,
+        'min_reorder_level' => $minReorder,
+        'max_stock_capacity' => $maxCapacity,
+        'unit_price' => $unitPrice,
+        'prescription_required' => $rxRequired,
+        'status' => $status,
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'UPDATE_MEDICINE',
+        'entity_type' => 'Medicine',
+        'entity_id' => $id,
+        'payload' => json_encode(['brand_name' => $brandName, 'unit_price' => $unitPrice]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Medicine details updated successfully.']);
+});
+
+Route::delete('/v1/medicines/{id}', function ($id) {
+    DB::table('medicines')->where('id', $id)->delete();
+
+    DB::table('audit_logs')->insert([
+        'action' => 'DELETE_MEDICINE',
+        'entity_type' => 'Medicine',
+        'entity_id' => $id,
+        'payload' => json_encode(['deleted_medicine_id' => $id]),
+        'created_at' => now()
+    ]);
+
+    return response()->json(['success' => true, 'message' => 'Medicine removed from formulary successfully.']);
 });
 
 Route::get('/v1/batches', function () {

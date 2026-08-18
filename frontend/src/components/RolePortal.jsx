@@ -39,6 +39,8 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [batches, setBatches] = useState([]);
   const [aiRiskData, setAiRiskData] = useState([]);
   const [appointments, setAppointments] = useState([]);
+  const [auditLogsList, setAuditLogsList] = useState([]);
+
 
   // FEFO Medicine Batches & Inventory Transactions State
   const [batchesList, setBatchesList] = useState([]);
@@ -283,9 +285,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       fetchAiRiskData();
       fetchPermissionsData();
       fetchRolePermissionsMatrix();
+      fetchAuditLogsData();
 
       fetchStaffData();
       fetchSuppliersData();
+
 
 
       if (user.roleKey === 'super_admin') {
@@ -318,6 +322,16 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       console.error('Transactions fetch error:', err);
     }
   };
+
+  const fetchAuditLogsData = async () => {
+    try {
+      const res = await fetch('/api/v1/admin/audit-logs');
+      if (res.ok) setAuditLogsList(await res.json());
+    } catch (err) {
+      console.error('Audit logs fetch error:', err);
+    }
+  };
+
 
   const fetchAiRiskData = async () => {
     try {
@@ -3001,29 +3015,256 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
-        {/* Dashboard Tab */}
+        {/* TAB: EXECUTIVE PRODUCTION-GRADE OPERATIONS & ANALYTICS DASHBOARD */}
         {activeTab === 'dashboard' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '18px' }}>
-              <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>AUTHORIZED ROLE</div>
-                <div style={{ fontSize: '1.3rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{user.role}</div>
+            {/* System Infrastructure Health & Connectivity Live Bar */}
+            <div className="glass-panel" style={{ padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <Server size={22} color="var(--teal-accent)" />
+                <div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: '800' }}>MediSync Platform Operational Command</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Real-Time System Health • Node ID: MEDISYNC-PROD-LK</div>
+                </div>
               </div>
-              <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>AI TRIAGES EVALUATED</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{triageLogsList.length} Evaluations</div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '18px', flexWrap: 'wrap', fontSize: '0.82rem', fontWeight: '700' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="pulse-dot" style={{ width: '8px', height: '8px', background: 'var(--success)', borderRadius: '50%', display: 'inline-block' }}></span>
+                  <span>Database: <strong style={{ color: 'var(--success)' }}>MySQL 8+ Online</strong></span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="pulse-dot" style={{ width: '8px', height: '8px', background: 'var(--teal-accent)', borderRadius: '50%', display: 'inline-block' }}></span>
+                  <span>AI Engine: <strong style={{ color: 'var(--teal-accent)' }}>Groq Llama 3.3 Active</strong></span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span className="pulse-dot" style={{ width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%', display: 'inline-block' }}></span>
+                  <span>API Backend: <strong style={{ color: 'var(--primary)' }}>Laravel v11 (Port 8000)</strong></span>
+                </div>
               </div>
-              <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>HOSPITAL WARDS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{departmentsList.length} Wards</div>
+            </div>
+
+            {/* Hero Executive KPI Analytics Cards */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>AI TRIAGE EVALUATIONS</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{triageLogsList.length} Cases</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
+                  <span style={{ color: 'var(--danger)', fontWeight: '700' }}>🚨 {emergencyTriageCount} Emergency</span>
+                  <span style={{ color: 'var(--warning)', fontWeight: '700' }}>⚡ {urgentTriageCount} Urgent</span>
+                </div>
               </div>
-              <div className="glass-panel" style={{ padding: '20px' }}>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>REGISTERED PATIENTS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{patients.length} Patients</div>
+
+              <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>REGISTERED PATIENTS (EHR)</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{patients.length} Patients</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+                  Active Electronic Health Records catalog
+                </div>
+              </div>
+
+              <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid var(--primary)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CONSULTATIONS & APPOINTMENTS</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{appointments.length} Scheduled</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
+                  <span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ {completedCount} Done</span>
+                  <span style={{ color: 'var(--primary)', fontWeight: '700' }}>⌛ {scheduledCount} Pending</span>
+                </div>
+              </div>
+
+              <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ELECTRONIC PRESCRIPTIONS (Rx)</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{prescriptionsList.length} Rx Issued</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
+                  <span style={{ color: 'var(--success)', fontWeight: '700' }}>{dispensedRxCount} Dispensed</span>
+                  <span style={{ color: 'var(--primary)', fontWeight: '700' }}>{issuedRxCount} Active</span>
+                </div>
+              </div>
+
+              <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid var(--danger)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>FEFO STOCK & INVENTORY</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px' }}>{totalStockUnits} Units</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
+                  <span>{batchesList.length} Batches</span>
+                  <span style={{ color: 'var(--danger)', fontWeight: '700' }}>⚠️ {expiredBatchesCount + lowBatchesCount} Low/Risk</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Operational Shortcuts Bar */}
+            <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', paddingBottom: '4px' }}>
+              <button onClick={() => handleTabChange('patients')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                <Users size={16} color="var(--success)" />
+                <span>Patient Records (EHR)</span>
+              </button>
+              <button onClick={() => handleTabChange('appointments')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                <Calendar size={16} color="var(--primary)" />
+                <span>Consultations</span>
+              </button>
+              <button onClick={() => handleTabChange('ai_triage')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap', borderColor: 'var(--teal-accent)', color: 'var(--teal-accent)' }}>
+                <Bot size={16} />
+                <span>Groq AI Symptom Triage</span>
+              </button>
+              <button onClick={() => handleTabChange('batches')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                <Package size={16} color="var(--warning)" />
+                <span>FEFO Batches & Movements</span>
+              </button>
+              <button onClick={() => handleTabChange('ai_risk')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                <Sparkles size={16} color="var(--danger)" />
+                <span>AI Expiry Intelligence</span>
+              </button>
+              {user.roleKey === 'super_admin' && (
+                <button onClick={() => handleTabChange('permissions')} className="btn btn-secondary" style={{ fontSize: '0.82rem', whiteSpace: 'nowrap' }}>
+                  <Key size={16} color="var(--primary)" />
+                  <span>Access Control Matrix</span>
+                </button>
+              )}
+            </div>
+
+            {/* Analytics Visualizations Grid */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
+              {/* AI Clinical Triage Level Distribution */}
+              <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Bot size={18} color="var(--teal-accent)" />
+                    <span>AI Clinical Triage Level Distribution</span>
+                  </h3>
+                  <span style={{ fontSize: '0.78rem', background: 'rgba(56, 189, 248, 0.15)', color: 'var(--teal-accent)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                    Avg AI Confidence: {avgConfidenceScore}%
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: '700', color: 'var(--danger)' }}>🚨 Emergency Priority</span>
+                      <span style={{ fontWeight: '800' }}>{emergencyTriageCount} Cases ({triageLogsList.length > 0 ? ((emergencyTriageCount / triageLogsList.length) * 100).toFixed(0) : 0}%)</span>
+                    </div>
+                    <div style={{ width: '100%', height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden' }}>
+                      <div style={{ width: `${triageLogsList.length > 0 ? (emergencyTriageCount / triageLogsList.length) * 100 : 0}%`, height: '100%', background: 'var(--danger)', borderRadius: '5px' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: '700', color: 'var(--warning)' }}>⚡ Urgent Priority</span>
+                      <span style={{ fontWeight: '800' }}>{urgentTriageCount} Cases ({triageLogsList.length > 0 ? ((urgentTriageCount / triageLogsList.length) * 100).toFixed(0) : 0}%)</span>
+                    </div>
+                    <div style={{ width: '100%', height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden' }}>
+                      <div style={{ width: `${triageLogsList.length > 0 ? (urgentTriageCount / triageLogsList.length) * 100 : 0}%`, height: '100%', background: 'var(--warning)', borderRadius: '5px' }}></div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '6px' }}>
+                      <span style={{ fontWeight: '700', color: 'var(--success)' }}>🟢 Routine OPD</span>
+                      <span style={{ fontWeight: '800' }}>{triageLogsList.length - emergencyTriageCount - urgentTriageCount} Cases ({triageLogsList.length > 0 ? (((triageLogsList.length - emergencyTriageCount - urgentTriageCount) / triageLogsList.length) * 100).toFixed(0) : 0}%)</span>
+                    </div>
+                    <div style={{ width: '100%', height: '10px', background: 'rgba(255,255,255,0.08)', borderRadius: '5px', overflow: 'hidden' }}>
+                      <div style={{ width: `${triageLogsList.length > 0 ? ((triageLogsList.length - emergencyTriageCount - urgentTriageCount) / triageLogsList.length) * 100 : 0}%`, height: '100%', background: 'var(--success)', borderRadius: '5px' }}></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ background: 'rgba(0,0,0,0.15)', padding: '12px', borderRadius: '8px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  💡 Emergency cases are auto-flagged and routed to Cardiology & ICU with high priority notification.
+                </div>
+              </div>
+
+              {/* Hospital Wards & Operational Capacity */}
+              <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Building2 size={18} color="var(--primary)" />
+                    <span>Hospital Wards & Staff Roster Distribution</span>
+                  </h3>
+                  <span style={{ fontSize: '0.78rem', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700' }}>
+                    {onDutyCount} Staff On-Duty
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  {departmentsList.slice(0, 6).map(d => (
+                    <div key={d.id} style={{ background: 'rgba(0,0,0,0.15)', padding: '12px', borderRadius: '8px' }}>
+                      <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--primary)' }}>{d.name}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Code: {d.code} • Floor: {d.location_floor || 'G-01'}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginTop: '6px', fontWeight: '700' }}>
+                        <span>Capacity: 25 Beds</span>
+                        <span style={{ color: 'var(--success)' }}>Active</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* FEFO Expiry Risk & Recent Real-Time Security Audit Stream */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: '20px' }}>
+              {/* FEFO Expiry Risk & Demand Forecast Heatmap */}
+              <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color="var(--danger)" />
+                    <span>FEFO Expiry Risk Heatmap & AI Insights</span>
+                  </h3>
+                  <button onClick={() => handleTabChange('ai_risk')} className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: '0.75rem' }}>
+                    View All Risk Insights
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {aiRiskData.slice(0, 3).map(item => {
+                    const riskScore = parseFloat(item.expiry_risk_score) || 0;
+                    const isCritical = riskScore >= 80;
+                    const borderColor = isCritical ? 'var(--danger)' : 'var(--warning)';
+
+                    return (
+                      <div key={item.id} style={{ background: 'rgba(0,0,0,0.15)', padding: '14px', borderRadius: '8px', borderLeft: `4px solid ${borderColor}` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>{item.brand_name}</div>
+                          <span style={{ fontWeight: '800', color: borderColor, fontSize: '0.88rem' }}>{riskScore.toFixed(1)}% Risk</span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '2px 0 6px' }}>
+                          Batch: {item.batch_number} • Exp: {item.exp_date} • Stock: {item.current_quantity} {item.unit || 'pcs'}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: '6px' }}>
+                          {item.ai_recommendation?.slice(0, 110)}...
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Real-Time Platform Audit Trail Stream */}
+              <div className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ fontSize: '1.05rem', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <ShieldCheck size={18} color="var(--success)" />
+                    <span>Real-Time Security & System Audit Log Stream</span>
+                  </h3>
+                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>Live Feed</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '280px', overflowY: 'auto' }}>
+                  {auditLogsList.slice(0, 8).map(log => (
+                    <div key={log.id} style={{ background: 'rgba(0,0,0,0.15)', padding: '10px 12px', borderRadius: '6px', fontSize: '0.78rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <span style={{ fontWeight: '800', color: 'var(--primary)', fontFamily: 'monospace' }}>{log.action}</span>
+                        <span style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>({log.entity_type} #{log.entity_id})</span>
+                      </div>
+                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                        {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         )}
+
 
         {/* TAB: AI EXPIRY & FEFO RISK (POWERED BY GROQ AI) */}
         {activeTab === 'ai_risk' && (

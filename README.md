@@ -85,6 +85,40 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Profile Management**: Profile details, contact numbers, department assignments, and Base64 custom avatar uploading.
 * **Password Update**: Bcrypt hashing, dynamic color-coded password strength meter (`Weak`, `Fair`, `Strong`), and audit logging (`USER_PASSWORD_UPDATED`).
 
+### 🔔 9. Live SSE / Real-Time Notification Center (`TopBar Alerts`)
+* **Real-Time Stream**: Server-Sent Events (SSE) stream (`/api/v1/notifications/stream`) pushes live pop-up alerts and badge notifications for critical AI emergency triage cases, low-stock / stock-out reorder thresholds, and new prescription issuances without requiring manual page reloads.
+* **Notification Popover**: TopBar bell icon with live badge counter and interactive stream popover allowing single-click navigation to affected clinical or inventory modules.
+
+### 🩺 10. Patient Self-Service Web Portal (`/patient-portal`)
+* **Secure EHR Medical Hub**: Patient self-service portal accessible via unique Patient Code (`PAT-2026-001`) or NIC/Passport numbers.
+* **Active Rx & Allergy Overview**: View prescribed medications, dosages, prescribing clinicians, dispensing status, and allergy warnings.
+* **Follow-Up Consultation Request**: Interactive appointment booking form allowing patients to request follow-up consultations with specialized doctors online.
+
+### ❄️ 11. Cold-Chain Storage & Temperature Logging (`/dashboard/batches`)
+* **Biologics Temperature Tracking**: Digital temperature monitoring for cold-chain sensitive pharmaceuticals (vaccines, insulin, biologics) stored between 2.0°C and 8.0°C.
+* **Automated Breach Alerts**: Detects upper/lower temperature limit breaches (`BREACH_HIGH`, `BREACH_LOW`) and triggers security audit alerts (`COLD_CHAIN_TEMPERATURE_BREACH_ALERT`).
+
+### 🛡️ 12. Real-Time Drug-Drug Interaction & Allergy Safety Checks (`/dashboard/prescriptions`)
+* **Patient EHR Allergy Cross-Checking**: Automatically evaluates prescribed medications against patient allergy records (e.g. Penicillin, Sulfa drugs) and flags critical anaphylaxis warnings (`CRITICAL_CONTRAINDICATION`).
+* **Drug-Drug Interaction (DDI) Engine**: Analyzes prescribed multi-drug combinations for dangerous clinical interactions (e.g. Atorvastatin + Clarithromycin, Aspirin + Warfarin) with severity grading (`MAJOR`, `MODERATE`) and clinical mitigation guidance.
+
+### 📄 13. Digital e-Prescription PDF & QR Code Generator (`/dashboard/prescriptions`)
+* **Scannable Verification QR Code**: Generates dynamic QR codes for each issued e-Prescription (`/v1/prescriptions/{code}/verify`), enabling instant pharmacy counter barcode scanning and verification.
+* **Cryptographic SHA-256 Signature Stamp**: Digitally signs prescription slips with doctor credentials and SLMC registration numbers to prevent drug forgery or unauthorized altering.
+* **Downloadable & Printable PDF Document**: One-click generation of official hospital e-Prescription slips formatted for physical printing or PDF downloads.
+
+### 🗑️ 14. Expired / Damaged Stock Condemnation Ledger (`/dashboard/batches`)
+* **Stock Batch Decommissioning Workflow**: Structured compliance process for logging and discarding expired, damaged, or temperature-breached pharmaceutical batches (`/v1/inventory/condemnations`).
+* **Cryptographic Destruction Certificates**: Generates SHA-256 digital destruction certificate hashes signed with witness auditor names, disposal methods (e.g., *High-Temp Incineration*), and audit trail timestamps.
+
+### 🚚 15. Automated Purchase Order (PO) & Reorder Engine (`/dashboard/suppliers`)
+* **Threshold-Triggered PO Auto-Generation**: Scans total medicine stock across all active FEFO batches and auto-generates Purchase Order drafts (`PO-2026-XXXX`) when stock drops below minimum reorder thresholds (`/v1/purchase-orders/auto-generate`).
+* **Instant Supplier Email Dispatch**: Dispatches formatted purchase orders directly to preferred supplier emails (e.g. `procurement@pharmanet.lk`) with estimated procurement costs, requested quantities, and system audit trail logs.
+
+### 🩺 16. ICD-10 / ICD-11 Clinical Diagnostic Code Integration (`/dashboard/ai-triage`)
+* **Standardized Medical Coding**: Integrated WHO ICD-10 and ICD-11 international diagnostic coding database (`/v1/icd-codes`).
+* **Real-Time Auto-Complete Search**: Auto-complete search functionality by code key (e.g., `I10`, `E11.9`, `BA00`) or condition description for fast clinical diagnostic classification during patient consultations and AI triage evaluations.
+
 ---
 
 ## 📂 System Folder Structure

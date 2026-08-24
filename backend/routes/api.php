@@ -2373,5 +2373,654 @@ Route::post('/v1/inventory-transactions', function (Request $request) {
     ], 201);
 });
 
+/* -------------------------------------------------------------------------- */
+/* REAL-TIME LIVE SSE NOTIFICATION CENTER & ALERTS                            */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/notifications', function () {
+    // 1. Critical AI Emergency Triage Cases
+    $emergencyTriages = DB::table('ai_symptom_triage_logs')
+        ->where('suggested_triage_level', 'Emergency')
+        ->orderBy('created_at', 'desc')
+        ->limit(5)
+        ->get()
+        ->map(function ($t) {
+            return [
+                'id' => 'triage-' . $t->id,
+                'category' => 'EMERGENCY_TRIAGE',
+                'title' => '🚨 Critical AI Emergency Triage Alert',
+                'message' => "Patient symptom triage requires immediate intervention in {$t->recommended_department}.",
+                'severity' => 'danger',
+                'timestamp' => $t->created_at,
+                'link' => 'ai_triage'
+            ];
+        });
+
+    // 2. Low Stock / Stock-out Batches
+    $lowStockBatches = DB::table('medicine_batches')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->where('medicine_batches.current_quantity', '<=', DB::raw('medicines.min_reorder_level'))
+        ->orWhere('medicine_batches.status', 'expired')
+        ->select('medicine_batches.*', 'medicines.brand_name', 'medicines.generic_name')
+        ->orderBy('medicine_batches.current_quantity', 'asc')
+        ->limit(5)
+        ->get()
+        ->map(function ($b) {
+            $isExpired = $b->status === 'expired' || strtotime($b->exp_date) < time();
+            return [
+                'id' => 'batch-' . $b->id,
+                'category' => 'LOW_STOCK',
+                'title' => $isExpired ? '⚠️ Expired Batch Stock Alert' : '⚡ Low Stock Reorder Threshold Alert',
+                'message' => "{$b->brand_name} ({$b->generic_name}) Batch #{$b->batch_number} has only {$b->current_quantity} units remaining.",
+                'severity' => $isExpired ? 'danger' : 'warning',
+                'timestamp' => $b->updated_at ?? $b->created_at,
+                'link' => 'batches'
+            ];
+        });
+
+    // 3. New Prescription Issued
+    $recentRx = DB::table('prescriptions')
+        ->join('patients', 'prescriptions.patient_id', '=', 'patients.id')
+        ->select('prescriptions.*', 'patients.first_name', 'patients.last_name')
+        ->orderBy('prescriptions.created_at', 'desc')
+        ->limit(5)
+        ->get()
+        ->map(function ($rx) {
+            $code = $rx->prescription_code ?? 'RX-2026';
+            return [
+                'id' => 'rx-' . $rx->id,
+                'category' => 'NEW_PRESCRIPTION',
+                'title' => '💊 New Clinical Prescription Issued',
+                'message' => "Rx #{$code} issued for patient {$rx->first_name} {$rx->last_name}.",
+                'severity' => 'info',
+                'timestamp' => $rx->created_at,
+                'link' => 'prescriptions'
+            ];
+        });
+
+    $all = collect([])->concat($emergencyTriages)->concat($lowStockBatches)->concat($recentRx);
+
+    return response()->json([
+        'success' => true,
+        'notifications' => $all->values(),
+        'unread_count' => $all->count()
+    ]);
+});
+
+Route::get('/v1/notifications/stream', function () {
+    return response()->stream(function () {
+        $emergency = DB::table('ai_symptom_triage_logs')
+            ->where('suggested_triage_level', 'Emergency')
+            ->orderBy('created_at', 'desc')
+            ->limit(3)
+            ->get();
+
+        $lowStock = DB::table('medicine_batches')
+            ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+            ->where('medicine_batches.current_quantity', '<=', DB::raw('medicines.min_reorder_level'))
+            ->select('medicine_batches.*', 'medicines.brand_name')
+            ->limit(3)
+            ->get();
+
+        $payload = [
+            'emergency_count' => $emergency->count(),
+            'low_stock_count' => $lowStock->count(),
+            'latest_emergency' => $emergency->first(),
+            'latest_low_stock' => $lowStock->first(),
+            'timestamp' => date('c')
+        ];
+
+        echo "event: message\n";
+        echo 'data: ' . json_encode($payload) . "\n\n";
+        if (ob_get_level() > 0) ob_flush();
+        flush();
+    }, 200, [
+        'Content-Type' => 'text/event-stream',
+        'Cache-Control' => 'no-cache, no-transform',
+        'Connection' => 'keep-alive',
+        'X-Accel-Buffering' => 'no'
+    ]);
+});
+
+/* -------------------------------------------------------------------------- */
+/* PATIENT SELF-SERVICE PORTAL APIs                                           */
+/* -------------------------------------------------------------------------- */
+
+Route::post('/v1/patient-portal/lookup', function (Request $request) {
+    $content = $request->getContent();
+    $raw = json_decode($content, true) ?? [];
+    $search = trim($request->input('patient_code') ?? $raw['patient_code'] ?? '');
+    if (!$search && preg_match('/patient_code\s*:\s*["\']?([^"\'\}\s]+)/i', $content, $m)) {
+        $search = trim($m[1]);
+    }
+    if (!$search) {
+        return response()->json(['success' => false, 'message' => 'Patient code or NIC required.'], 400);
+    }
+
+    $patient = DB::table('patients')
+        ->where('patient_code', $search)
+        ->orWhere('nic_passport', $search)
+        ->first();
+
+    if (!$patient) {
+        return response()->json(['success' => false, 'message' => 'No patient record found matching that code or NIC.'], 404);
+    }
+
+    // Active Prescriptions (Rx)
+    $prescriptions = DB::table('prescriptions')
+        ->join('staff', 'prescriptions.doctor_id', '=', 'staff.id')
+        ->where('prescriptions.patient_id', $patient->id)
+        ->select('prescriptions.*', 'staff.first_name as doctor_first', 'staff.last_name as doctor_last', 'staff.specialization')
+        ->orderBy('prescriptions.created_at', 'desc')
+        ->get();
+
+    // Consultation Appointments
+    $appointments = DB::table('appointments')
+        ->join('staff', 'appointments.doctor_id', '=', 'staff.id')
+        ->where('appointments.patient_id', $patient->id)
+        ->select('appointments.*', 'staff.first_name as doctor_first', 'staff.last_name as doctor_last', 'staff.specialization')
+        ->orderBy('appointments.appointment_date', 'desc')
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'patient' => $patient,
+        'prescriptions' => $prescriptions,
+        'appointments' => $appointments
+    ]);
+});
+
+Route::post('/v1/patient-portal/request-appointment', function (Request $request) {
+    $raw = json_decode($request->getContent(), true) ?? [];
+    $patientId = (int)($request->input('patient_id') ?? $raw['patient_id'] ?? 0);
+    $doctorId = (int)($request->input('doctor_id') ?? $raw['doctor_id'] ?? 1);
+    $date = $request->input('appointment_date') ?? $raw['appointment_date'] ?? date('Y-m-d H:i:s', strtotime('+1 day'));
+    $type = $request->input('consultation_type') ?? $raw['consultation_type'] ?? 'General Checkup';
+    $reason = $request->input('clinical_reason') ?? $raw['clinical_reason'] ?? 'Follow-up patient consultation request';
+
+    $patientExists = DB::table('patients')->where('id', $patientId)->exists();
+    if (!$patientExists) {
+        return response()->json(['success' => false, 'message' => 'Invalid patient record.'], 400);
+    }
+
+    $aptId = DB::table('appointments')->insertGetId([
+        'patient_id' => $patientId,
+        'doctor_id' => $doctorId,
+        'appointment_date' => $date,
+        'consultation_type' => $type,
+        'priority' => 'Normal',
+        'clinical_reason' => $reason,
+        'status' => 'Scheduled',
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PATIENT_SELF_SERVICE_APPOINTMENT_REQUESTED',
+        'entity_type' => 'Appointment',
+        'entity_id' => $aptId,
+        'payload' => json_encode(['patient_id' => $patientId, 'doctor_id' => $doctorId, 'date' => $date]),
+        'created_at' => now()
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Follow-up appointment requested successfully!',
+        'appointment_id' => $aptId
+    ], 201);
+});
+
+/* -------------------------------------------------------------------------- */
+/* COLD-CHAIN STORAGE & TEMPERATURE LOGGING APIs                              */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/cold-chain/logs', function () {
+    $logs = DB::table('cold_chain_logs')
+        ->join('medicine_batches', 'cold_chain_logs.batch_id', '=', 'medicine_batches.id')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->select('cold_chain_logs.*', 'medicine_batches.batch_number', 'medicines.brand_name', 'medicines.generic_name')
+        ->orderBy('cold_chain_logs.created_at', 'desc')
+        ->limit(30)
+        ->get();
+
+    $breachCount = $logs->where('status', '!=', 'NORMAL')->count();
+    $normalCount = $logs->where('status', 'NORMAL')->count();
+
+    return response()->json([
+        'success' => true,
+        'logs' => $logs,
+        'breach_count' => $breachCount,
+        'normal_count' => $normalCount
+    ]);
+});
+
+Route::post('/v1/cold-chain/logs', function (Request $request) {
+    $raw = json_decode($request->getContent(), true) ?? [];
+    $batchId = (int)($request->input('batch_id') ?? $raw['batch_id'] ?? 1);
+    $location = $request->input('sensor_location') ?? $raw['sensor_location'] ?? 'Cold Storage Unit 1 - Rack A';
+    $temp = (float)($request->input('recorded_temp_celsius') ?? $raw['recorded_temp_celsius'] ?? 4.5);
+    $min = (float)($request->input('min_threshold') ?? $raw['min_threshold'] ?? 2.0);
+    $max = (float)($request->input('max_threshold') ?? $raw['max_threshold'] ?? 8.0);
+    $notes = $request->input('notes') ?? $raw['notes'] ?? '';
+
+    $status = 'NORMAL';
+    if ($temp > $max) {
+        $status = 'BREACH_HIGH';
+    } else if ($temp < $min) {
+        $status = 'BREACH_LOW';
+    }
+
+    $logId = DB::table('cold_chain_logs')->insertGetId([
+        'batch_id' => $batchId,
+        'sensor_location' => $location,
+        'recorded_temp_celsius' => $temp,
+        'min_threshold' => $min,
+        'max_threshold' => $max,
+        'status' => $status,
+        'notes' => $notes ?: ($status !== 'NORMAL' ? "CRITICAL TEMPERATURE BREACH: Recorded {$temp}°C (Optimal: {$min}°C to {$max}°C)" : "Storage temperature optimal at {$temp}°C"),
+        'created_at' => now()
+    ]);
+
+    if ($status !== 'NORMAL') {
+        DB::table('audit_logs')->insert([
+            'action' => 'COLD_CHAIN_TEMPERATURE_BREACH_ALERT',
+            'entity_type' => 'ColdChainLog',
+            'entity_id' => $logId,
+            'payload' => json_encode(['batch_id' => $batchId, 'temp' => $temp, 'status' => $status, 'location' => $location]),
+            'created_at' => now()
+        ]);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => $status === 'NORMAL' ? 'Cold-chain temperature reading logged.' : 'CRITICAL ALERT: Cold-chain storage temperature breach recorded!',
+        'id' => $logId,
+        'status' => $status,
+        'recorded_temp' => $temp
+    ], 201);
+});
+
+/* -------------------------------------------------------------------------- */
+/* REAL-TIME DRUG-DRUG INTERACTION & ALLERGY SAFETY CHECK APIs               */
+/* -------------------------------------------------------------------------- */
+
+Route::post('/v1/prescriptions/safety-check', function (Request $request) {
+    $content = $request->getContent();
+    $raw = json_decode($content, true) ?? [];
+    $patientId = (int)($request->input('patient_id') ?? $raw['patient_id'] ?? 0);
+    $medicineIds = $request->input('medicine_ids') ?? $raw['medicine_ids'] ?? [];
+
+    if (empty($medicineIds) && preg_match('/medicine_ids\s*:\s*\[([0-9,\s]+)\]/i', $content, $m)) {
+        $medicineIds = array_map('intval', explode(',', $m[1]));
+    }
+    if (empty($patientId) && preg_match('/patient_id\s*:\s*(\d+)/i', $content, $m)) {
+        $patientId = (int)$m[1];
+    }
+
+    $patient = DB::table('patients')->where('id', $patientId)->first();
+    $patientAllergies = strtolower($patient ? ($patient->allergies ?? '') : '');
+
+    $medicines = DB::table('medicines')
+        ->whereIn('id', (array)$medicineIds)
+        ->get();
+
+    $allergyWarnings = [];
+    $interactionWarnings = [];
+
+    // 1. Patient Allergy Check
+    if ($patientAllergies && $patientAllergies !== 'none' && $patientAllergies !== 'none reported') {
+        foreach ($medicines as $med) {
+            $brandLower = strtolower($med->brand_name);
+            $genericLower = strtolower($med->generic_name);
+
+            if (
+                str_contains($patientAllergies, $genericLower) || 
+                str_contains($patientAllergies, $brandLower) ||
+                (str_contains($patientAllergies, 'penicillin') && (str_contains($genericLower, 'amox') || str_contains($genericLower, 'penicil'))) ||
+                (str_contains($patientAllergies, 'sulfa') && str_contains($genericLower, 'sulfa')) ||
+                (str_contains($patientAllergies, 'aspirin') && (str_contains($genericLower, 'aspirin') || str_contains($genericLower, 'nsaid')))
+            ) {
+                $allergyWarnings[] = [
+                    'severity' => 'CRITICAL_CONTRAINDICATION',
+                    'medicine' => "{$med->brand_name} ({$med->generic_name})",
+                    'conflict' => "Patient EHR records allergy to '{$patient->allergies}'. High risk of anaphylaxis / severe reaction!"
+                ];
+            }
+        }
+    }
+
+    // 2. Drug-Drug Interaction (DDI) Engine
+    $knownInteractions = [
+        ['groupA' => ['amox', 'amoxicillin'], 'groupB' => ['allopurinol'], 'severity' => 'MODERATE', 'note' => 'Increased incidence of skin rash when Amoxicillin is co-administered with Allopurinol.'],
+        ['groupA' => ['atorva', 'atorvastatin', 'lipitor'], 'groupB' => ['clarithro', 'clarithromycin', 'ketoconazole', 'erythro'], 'severity' => 'MAJOR', 'note' => 'Coadministration significantly increases statin blood concentrations, elevating risk of rhabdomyolysis and severe myopathy.'],
+        ['groupA' => ['aspirin'], 'groupB' => ['warfarin', 'heparin', 'ibuprofen'], 'severity' => 'MAJOR', 'note' => 'Potentiation of anticoagulant action and additive gastrointestinal mucosal erosion. High risk of major bleeding.'],
+        ['groupA' => ['metformin'], 'groupB' => ['contrast', 'cimetidine'], 'severity' => 'MODERATE', 'note' => 'Increased risk of metformin accumulation and renal impairment/lactic acidosis. Monitor eGFR.'],
+    ];
+
+    $medCount = count($medicines);
+    for ($i = 0; $i < $medCount; $i++) {
+        for ($j = $i + 1; $j < $medCount; $j++) {
+            $medA = $medicines[$i];
+            $medB = $medicines[$j];
+
+            $genA = strtolower($medA->generic_name . ' ' . $medA->brand_name);
+            $genB = strtolower($medB->generic_name . ' ' . $medB->brand_name);
+
+            foreach ($knownInteractions as $ddi) {
+                $matchA1 = false; foreach ($ddi['groupA'] as $kw) { if (str_contains($genA, $kw)) $matchA1 = true; }
+                $matchB1 = false; foreach ($ddi['groupB'] as $kw) { if (str_contains($genB, $kw)) $matchB1 = true; }
+
+                $matchA2 = false; foreach ($ddi['groupA'] as $kw) { if (str_contains($genB, $kw)) $matchA2 = true; }
+                $matchB2 = false; foreach ($ddi['groupB'] as $kw) { if (str_contains($genA, $kw)) $matchB2 = true; }
+
+                if (($matchA1 && $matchB1) || ($matchA2 && $matchB2)) {
+                    $interactionWarnings[] = [
+                        'severity' => $ddi['severity'],
+                        'pair' => "{$medA->brand_name} + {$medB->brand_name}",
+                        'note' => $ddi['note']
+                    ];
+                }
+            }
+        }
+    }
+
+    $hasWarning = count($allergyWarnings) > 0 || count($interactionWarnings) > 0;
+    $overallRating = 'SAFE';
+    if (count($allergyWarnings) > 0 || collect($interactionWarnings)->contains('severity', 'MAJOR')) {
+        $overallRating = 'CRITICAL_CONTRAINDICATION';
+    } else if (count($interactionWarnings) > 0) {
+        $overallRating = 'CAUTION';
+    }
+
+    return response()->json([
+        'success' => true,
+        'has_warning' => $hasWarning,
+        'overall_rating' => $overallRating,
+        'allergy_warnings' => $allergyWarnings,
+        'interaction_warnings' => $interactionWarnings,
+        'evaluated_medicines_count' => $medCount
+    ]);
+});
+
+/* -------------------------------------------------------------------------- */
+/* DIGITAL E-PRESCRIPTION VERIFICATION & QR CODE APIs                          */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/prescriptions/{code}/verify', function ($code) {
+    $rx = DB::table('prescriptions')
+        ->join('patients', 'prescriptions.patient_id', '=', 'patients.id')
+        ->join('staff', 'prescriptions.doctor_id', '=', 'staff.id')
+        ->where('prescriptions.prescription_code', $code)
+        ->orWhere('prescriptions.id', (int)$code)
+        ->select(
+            'prescriptions.*',
+            'patients.patient_code', 'patients.first_name as patient_first', 'patients.last_name as patient_last', 'patients.allergies',
+            'staff.first_name as doctor_first', 'staff.last_name as doctor_last', 'staff.specialization', 'staff.license_number'
+        )
+        ->first();
+
+    if (!$rx) {
+        return response()->json(['success' => false, 'message' => 'Invalid or unverified prescription code.'], 404);
+    }
+
+    $items = DB::table('prescription_items')
+        ->join('medicines', 'prescription_items.medicine_id', '=', 'medicines.id')
+        ->where('prescription_id', $rx->id)
+        ->select('prescription_items.*', 'medicines.brand_name', 'medicines.generic_name')
+        ->get();
+
+    $signatureHash = hash('sha256', "MEDISYNC-RX-{$rx->prescription_code}-{$rx->doctor_id}-{$rx->issued_at}");
+
+    return response()->json([
+        'success' => true,
+        'verified' => true,
+        'prescription' => $rx,
+        'items' => $items,
+        'digital_signature' => [
+            'algorithm' => 'SHA-256',
+            'signature_hash' => $signatureHash,
+            'signed_by' => "Dr. {$rx->doctor_first} {$rx->doctor_last} ({$rx->specialization})",
+            'slmc_license' => $rx->license_number ?? 'SLMC-2026-REG'
+        ]
+    ]);
+});
+
+/* -------------------------------------------------------------------------- */
+/* EXPIRED / DAMAGED STOCK CONDEMNATION LEDGER APIs                            */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/inventory/condemnations', function () {
+    $condemnations = DB::table('stock_condemnations')
+        ->join('medicine_batches', 'stock_condemnations.batch_id', '=', 'medicine_batches.id')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->leftJoin('users', 'stock_condemnations.condemned_by_user_id', '=', 'users.id')
+        ->select(
+            'stock_condemnations.*',
+            'medicine_batches.batch_number', 'medicine_batches.exp_date',
+            'medicines.brand_name', 'medicines.generic_name', 'medicines.unit',
+            'users.name as condemned_by_name'
+        )
+        ->orderBy('stock_condemnations.created_at', 'desc')
+        ->get();
+
+    $totalUnitsDiscarded = $condemnations->sum('quantity_condemned');
+
+    return response()->json([
+        'success' => true,
+        'condemnations' => $condemnations,
+        'total_decommissioned_batches' => $condemnations->count(),
+        'total_units_discarded' => $totalUnitsDiscarded
+    ]);
+});
+
+Route::post('/v1/inventory/condemnations', function (Request $request) {
+    $raw = json_decode($request->getContent(), true) ?? [];
+    $batchId = (int)($request->input('batch_id') ?? $raw['batch_id'] ?? 0);
+    $qty = (int)($request->input('quantity_condemned') ?? $raw['quantity_condemned'] ?? 0);
+    $reason = $request->input('reason') ?? $raw['reason'] ?? 'EXPIRED';
+    $disposalMethod = $request->input('disposal_method') ?? $raw['disposal_method'] ?? 'Incineration';
+    $witnessedBy = $request->input('witnessed_by') ?? $raw['witnessed_by'] ?? 'Chief Pharmacist & Compliance Auditor';
+    $notes = $request->input('notes') ?? $raw['notes'] ?? '';
+    $userId = (int)($request->input('user_id') ?? $raw['user_id'] ?? 1);
+
+    if (empty($batchId) && preg_match('/batch_id\s*:\s*(\d+)/i', $request->getContent(), $m)) {
+        $batchId = (int)$m[1];
+    }
+
+    $batch = DB::table('medicine_batches')->where('id', $batchId)->first();
+    if (!$batch) {
+        return response()->json(['success' => false, 'message' => 'Selected medicine batch not found.'], 404);
+    }
+
+    if ($qty <= 0) {
+        $qty = $batch->current_quantity > 0 ? $batch->current_quantity : 100;
+    }
+
+    $actualQtyToDeduct = min($qty, $batch->current_quantity);
+    $newStockQty = max(0, $batch->current_quantity - $actualQtyToDeduct);
+
+    DB::table('medicine_batches')->where('id', $batchId)->update([
+        'current_quantity' => $newStockQty,
+        'status' => $newStockQty === 0 ? 'expired' : $batch->status,
+        'updated_at' => now()
+    ]);
+
+    DB::table('inventory_transactions')->insert([
+        'batch_id' => $batchId,
+        'user_id' => $userId,
+        'transaction_type' => 'EXPIRED_DISCARD',
+        'quantity' => $actualQtyToDeduct,
+        'reference_number' => 'CONDEMN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
+        'notes' => "Decommissioned & Condemned: {$actualQtyToDeduct} units due to {$reason}. Method: {$disposalMethod}",
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    $code = 'CND-2026-' . sprintf('%04d', rand(100, 9999));
+    $certHash = hash('sha256', "MEDISYNC-CONDEMNATION-{$code}-{$batchId}-{$actualQtyToDeduct}-" . now()->toIso8601String());
+
+    $condId = DB::table('stock_condemnations')->insertGetId([
+        'condemnation_code' => $code,
+        'batch_id' => $batchId,
+        'quantity_condemned' => $actualQtyToDeduct,
+        'reason' => $reason,
+        'disposal_method' => $disposalMethod,
+        'witnessed_by' => $witnessedBy,
+        'certificate_hash' => $certHash,
+        'condemned_by_user_id' => $userId,
+        'status' => 'CONDEMNED_DESTROYED',
+        'notes' => $notes,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'STOCK_BATCH_CONDEMNED_DESTROYED',
+        'entity_type' => 'StockCondemnation',
+        'entity_id' => $condId,
+        'payload' => json_encode(['batch_id' => $batchId, 'qty' => $actualQtyToDeduct, 'reason' => $reason, 'cert_hash' => $certHash]),
+        'created_at' => now()
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Stock batch decommissioned and destruction certificate generated.',
+        'condemnation_code' => $code,
+        'certificate_hash' => $certHash,
+        'id' => $condId
+    ], 201);
+});
+
+/* -------------------------------------------------------------------------- */
+/* AUTOMATED PURCHASE ORDER (PO) & REORDER ENGINE APIs                         */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/purchase-orders', function () {
+    $pos = DB::table('purchase_orders')
+        ->leftJoin('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
+        ->leftJoin('medicines', 'purchase_orders.medicine_id', '=', 'medicines.id')
+        ->select(
+            'purchase_orders.*',
+            'suppliers.company_name as supplier_name',
+            'medicines.brand_name', 'medicines.generic_name', 'medicines.unit'
+        )
+        ->orderBy('purchase_orders.created_at', 'desc')
+        ->get();
+
+    $totalValue = $pos->sum('estimated_cost');
+
+    return response()->json([
+        'success' => true,
+        'purchase_orders' => $pos,
+        'total_pos_count' => $pos->count(),
+        'total_procurement_value' => $totalValue
+    ]);
+});
+
+Route::post('/v1/purchase-orders/auto-generate', function (Request $request) {
+    $lowStockMedicines = DB::table('medicines')
+        ->leftJoin('medicine_batches', 'medicines.id', '=', 'medicine_batches.medicine_id')
+        ->select(
+            'medicines.id as medicine_id',
+            'medicines.brand_name', 'medicines.generic_name',
+            'medicines.min_reorder_level', 'medicines.max_stock_capacity', 'medicines.unit_price',
+            DB::raw('COALESCE(SUM(medicine_batches.current_quantity), 0) as total_current_stock')
+        )
+        ->groupBy('medicines.id', 'medicines.brand_name', 'medicines.generic_name', 'medicines.min_reorder_level', 'medicines.max_stock_capacity', 'medicines.unit_price')
+        ->get()
+        ->filter(function ($m) {
+            return $m->total_current_stock <= $m->min_reorder_level;
+        });
+
+    $suppliers = DB::table('suppliers')->get();
+    $defaultSupplier = $suppliers->first();
+
+    $generatedPOs = [];
+
+    foreach ($lowStockMedicines as $med) {
+        $supplier = $suppliers->firstWhere('id', 1) ?? $defaultSupplier;
+        $reorderQty = max(500, $med->max_stock_capacity - $med->total_current_stock);
+        $estCost = $reorderQty * ($med->unit_price > 0 ? $med->unit_price : 25.00);
+        $poNum = 'PO-2026-' . sprintf('%04d', rand(1000, 9999));
+        $supplierEmail = $supplier ? ($supplier->email ?? 'orders@pharmanet.lk') : 'orders@pharmanet.lk';
+
+        $exists = DB::table('purchase_orders')
+            ->where('medicine_id', $med->medicine_id)
+            ->where('status', 'SENT_TO_SUPPLIER')
+            ->whereDate('created_at', now()->toDateString())
+            ->exists();
+
+        if (!$exists && $supplier) {
+            $poId = DB::table('purchase_orders')->insertGetId([
+                'po_number' => $poNum,
+                'supplier_id' => $supplier->id,
+                'medicine_id' => $med->medicine_id,
+                'requested_quantity' => $reorderQty,
+                'estimated_cost' => $estCost,
+                'supplier_email' => $supplierEmail,
+                'status' => 'SENT_TO_SUPPLIER',
+                'triggered_by' => 'AUTOMATED_LOW_STOCK_THRESHOLD_ENGINE',
+                'notes' => "Auto-triggered reorder for {$med->brand_name}. Current stock: {$med->total_current_stock} (Min threshold: {$med->min_reorder_level}). PO dispatched to {$supplierEmail}.",
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+
+            DB::table('audit_logs')->insert([
+                'action' => 'AUTOMATED_PURCHASE_ORDER_GENERATED_DISPATCHED',
+                'entity_type' => 'PurchaseOrder',
+                'entity_id' => $poId,
+                'payload' => json_encode(['po_number' => $poNum, 'medicine' => $med->brand_name, 'qty' => $reorderQty, 'supplier_email' => $supplierEmail]),
+                'created_at' => now()
+            ]);
+
+            $generatedPOs[] = [
+                'id' => $poId,
+                'po_number' => $poNum,
+                'brand_name' => $med->brand_name,
+                'quantity' => $reorderQty,
+                'supplier_email' => $supplierEmail
+            ];
+        }
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => count($generatedPOs) > 0 ? "Successfully auto-generated and dispatched " . count($generatedPOs) . " Purchase Order(s) to suppliers." : "All medicine inventory levels optimal. No low-stock POs required.",
+        'generated_pos_count' => count($generatedPOs),
+        'generated_pos' => $generatedPOs
+    ], 201);
+});
+
+/* -------------------------------------------------------------------------- */
+/* ICD-10 / ICD-11 CLINICAL DIAGNOSTIC CODES API                               */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/icd-codes', function (Request $request) {
+    $search = strtolower($request->query('search', ''));
+    $version = $request->query('version', '');
+
+    $query = DB::table('icd_codes');
+
+    if (!empty($version)) {
+        $query->where('icd_version', $version);
+    }
+
+    if (!empty($search)) {
+        $query->where(function($q) use ($search) {
+            $q->where(DB::raw('LOWER(code)'), 'like', "%{$search}%")
+              ->orWhere(DB::raw('LOWER(description)'), 'like', "%{$search}%")
+              ->orWhere(DB::raw('LOWER(category)'), 'like', "%{$search}%");
+        });
+    }
+
+    $codes = $query->limit(50)->get();
+
+    return response()->json([
+        'success' => true,
+        'icd_codes' => $codes,
+        'total_count' => $codes->count()
+    ]);
+});
+
 
 

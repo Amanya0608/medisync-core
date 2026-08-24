@@ -373,6 +373,79 @@ class DatabaseSeeder extends Seeder
             'created_at' => now(), 'updated_at' => now()
         ]);
 
+        // 11. Cold Chain Temperature Sensor Logs
+        DB::table('cold_chain_logs')->insert([
+            'batch_id' => $batchSafe,
+            'sensor_location' => 'Central Pharmacy Cold Room Unit 1 - Rack A',
+            'recorded_temp_celsius' => 4.2,
+            'min_threshold' => 2.0,
+            'max_threshold' => 8.0,
+            'status' => 'NORMAL',
+            'notes' => 'Storage temperature optimal at 4.2°C',
+            'created_at' => now()->subHours(3)
+        ]);
+
+        DB::table('cold_chain_logs')->insert([
+            'batch_id' => $batchHighRisk,
+            'sensor_location' => 'Central Pharmacy Vaccine Fridge 2',
+            'recorded_temp_celsius' => 9.8,
+            'min_threshold' => 2.0,
+            'max_threshold' => 8.0,
+            'status' => 'BREACH_HIGH',
+            'notes' => 'CRITICAL TEMPERATURE BREACH: Recorded 9.8°C (Optimal: 2.0°C to 8.0°C). Compressor inspection required.',
+            'created_at' => now()->subMinutes(25)
+        ]);
+
+        // 12. Stock Condemnation Decommissioning Ledger
+        $cndCode = 'CND-2026-1088';
+        $cndHash = hash('sha256', "MEDISYNC-CONDEMNATION-{$cndCode}-{$batchHighRisk}-240-" . now()->toIso8601String());
+
+        DB::table('stock_condemnations')->insert([
+            'condemnation_code' => $cndCode,
+            'batch_id' => $batchHighRisk,
+            'quantity_condemned' => 240,
+            'reason' => 'EXPIRED',
+            'disposal_method' => 'Incineration',
+            'witnessed_by' => 'Chief Pharmacist & Compliance Auditor',
+            'certificate_hash' => $cndHash,
+            'condemned_by_user_id' => $adminUserId,
+            'status' => 'CONDEMNED_DESTROYED',
+            'notes' => 'Decommissioned expired batch AMX-2025-EXP14D. Formal destruction certificate issued.',
+            'created_at' => now()->subHours(1),
+            'updated_at' => now()->subHours(1)
+        ]);
+
+        // 13. Automated Purchase Orders (PO)
+        DB::table('purchase_orders')->insert([
+            'po_number' => 'PO-2026-8801',
+            'supplier_id' => $supplierId,
+            'medicine_id' => $medAmox,
+            'requested_quantity' => 1000,
+            'estimated_cost' => 45000.00,
+            'supplier_email' => 'procurement@pharmanet.lk',
+            'status' => 'SENT_TO_SUPPLIER',
+            'triggered_by' => 'AUTOMATED_LOW_STOCK_THRESHOLD_ENGINE',
+            'notes' => 'Auto-triggered purchase order for Amoxil 500mg as stock reached low-stock threshold (240 units). Dispatched to procurement@pharmanet.lk.',
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2)
+        ]);
+
+        // 14. Standardized ICD-10 & ICD-11 Clinical Diagnostic Codes
+        DB::table('icd_codes')->insert([
+            ['icd_version' => 'ICD-10', 'code' => 'I10', 'description' => 'Essential (primary) hypertension', 'category' => 'Circulatory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'E11.9', 'description' => 'Type 2 diabetes mellitus without complications', 'category' => 'Endocrine & Metabolic', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'J45.909', 'description' => 'Unspecified asthma, uncomplicated', 'category' => 'Respiratory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'I21.9', 'description' => 'Acute myocardial infarction, unspecified', 'category' => 'Circulatory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'J18.9', 'description' => 'Pneumonia, unspecified organism', 'category' => 'Respiratory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'K21.9', 'description' => 'Gastro-esophageal reflux disease without esophagitis', 'category' => 'Digestive System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'N39.0', 'description' => 'Urinary tract infection, site not specified', 'category' => 'Genitourinary System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'M54.5', 'description' => 'Low back pain, unspecific', 'category' => 'Musculoskeletal System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => 'BA00', 'description' => 'Essential hypertension (Primary hypertension)', 'category' => 'Diseases of Circulatory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => '5A11', 'description' => 'Type 2 diabetes mellitus', 'category' => 'Endocrine, Nutritional & Metabolic', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => 'CA23', 'description' => 'Asthma (Unspecified clinical phenotypes)', 'category' => 'Diseases of Respiratory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => 'BA41', 'description' => 'Acute myocardial infarction', 'category' => 'Diseases of Circulatory System', 'created_at' => now(), 'updated_at' => now()]
+        ]);
+
         // 10. Audit Log
         DB::table('audit_logs')->insert([
             'user_id' => $adminUserId,
@@ -381,7 +454,7 @@ class DatabaseSeeder extends Seeder
             'entity_id' => 1,
             'ip_address' => '127.0.0.1',
             'user_agent' => 'MediSync Enterprise Seeder v1.0',
-            'payload' => json_encode(['tables_seeded' => 18, 'status' => 'SUCCESS']),
+            'payload' => json_encode(['tables_seeded' => 22, 'status' => 'SUCCESS']),
             'created_at' => now()
         ]);
     }

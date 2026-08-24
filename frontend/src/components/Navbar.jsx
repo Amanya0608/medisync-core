@@ -1,7 +1,7 @@
 import React from 'react';
-import { BrainCircuit, Sun, Moon, LogIn, UserPlus, ShieldCheck } from 'lucide-react';
+import { BrainCircuit, Sun, Moon, LogIn, UserPlus, ShieldCheck, HeartPulse } from 'lucide-react';
 
-export default function Navbar({ theme, setTheme, onOpenLogin, onOpenRegister, backendOnline }) {
+export default function Navbar({ theme, setTheme, onOpenLogin, onOpenRegister, onOpenPatientPortal, backendOnline }) {
   return (
     <header className="landing-nav">
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -39,6 +39,11 @@ export default function Navbar({ theme, setTheme, onOpenLogin, onOpenRegister, b
           title="Toggle Dark / Light Mode"
         >
           {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+        </button>
+
+        <button onClick={onOpenPatientPortal} className="btn btn-secondary" style={{ color: 'var(--teal-accent)', borderColor: 'var(--teal-accent)' }}>
+          <HeartPulse size={16} />
+          <span>Patient Portal</span>
         </button>
 
         <button onClick={onOpenLogin} className="btn btn-secondary">

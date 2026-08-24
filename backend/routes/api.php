@@ -2482,5 +2482,93 @@ Route::get('/v1/notifications/stream', function () {
     ]);
 });
 
+/* -------------------------------------------------------------------------- */
+/* PATIENT SELF-SERVICE PORTAL APIs                                           */
+/* -------------------------------------------------------------------------- */
+
+Route::post('/v1/patient-portal/lookup', function (Request $request) {
+    $content = $request->getContent();
+    $raw = json_decode($content, true) ?? [];
+    $search = trim($request->input('patient_code') ?? $raw['patient_code'] ?? '');
+    if (!$search && preg_match('/patient_code\s*:\s*["\']?([^"\'\}\s]+)/i', $content, $m)) {
+        $search = trim($m[1]);
+    }
+    if (!$search) {
+        return response()->json(['success' => false, 'message' => 'Patient code or NIC required.'], 400);
+    }
+
+    $patient = DB::table('patients')
+        ->where('patient_code', $search)
+        ->orWhere('nic_passport', $search)
+        ->first();
+
+    if (!$patient) {
+        return response()->json(['success' => false, 'message' => 'No patient record found matching that code or NIC.'], 404);
+    }
+
+    // Active Prescriptions (Rx)
+    $prescriptions = DB::table('prescriptions')
+        ->join('staff', 'prescriptions.doctor_id', '=', 'staff.id')
+        ->where('prescriptions.patient_id', $patient->id)
+        ->select('prescriptions.*', 'staff.first_name as doctor_first', 'staff.last_name as doctor_last', 'staff.specialization')
+        ->orderBy('prescriptions.created_at', 'desc')
+        ->get();
+
+    // Consultation Appointments
+    $appointments = DB::table('appointments')
+        ->join('staff', 'appointments.doctor_id', '=', 'staff.id')
+        ->where('appointments.patient_id', $patient->id)
+        ->select('appointments.*', 'staff.first_name as doctor_first', 'staff.last_name as doctor_last', 'staff.specialization')
+        ->orderBy('appointments.appointment_date', 'desc')
+        ->get();
+
+    return response()->json([
+        'success' => true,
+        'patient' => $patient,
+        'prescriptions' => $prescriptions,
+        'appointments' => $appointments
+    ]);
+});
+
+Route::post('/v1/patient-portal/request-appointment', function (Request $request) {
+    $raw = json_decode($request->getContent(), true) ?? [];
+    $patientId = (int)($request->input('patient_id') ?? $raw['patient_id'] ?? 0);
+    $doctorId = (int)($request->input('doctor_id') ?? $raw['doctor_id'] ?? 1);
+    $date = $request->input('appointment_date') ?? $raw['appointment_date'] ?? date('Y-m-d H:i:s', strtotime('+1 day'));
+    $type = $request->input('consultation_type') ?? $raw['consultation_type'] ?? 'General Checkup';
+    $reason = $request->input('clinical_reason') ?? $raw['clinical_reason'] ?? 'Follow-up patient consultation request';
+
+    $patientExists = DB::table('patients')->where('id', $patientId)->exists();
+    if (!$patientExists) {
+        return response()->json(['success' => false, 'message' => 'Invalid patient record.'], 400);
+    }
+
+    $aptId = DB::table('appointments')->insertGetId([
+        'patient_id' => $patientId,
+        'doctor_id' => $doctorId,
+        'appointment_date' => $date,
+        'consultation_type' => $type,
+        'priority' => 'Normal',
+        'clinical_reason' => $reason,
+        'status' => 'Scheduled',
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'PATIENT_SELF_SERVICE_APPOINTMENT_REQUESTED',
+        'entity_type' => 'Appointment',
+        'entity_id' => $aptId,
+        'payload' => json_encode(['patient_id' => $patientId, 'doctor_id' => $doctorId, 'date' => $date]),
+        'created_at' => now()
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Follow-up appointment requested successfully!',
+        'appointment_id' => $aptId
+    ], 201);
+});
+
 
 

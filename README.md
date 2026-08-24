@@ -89,6 +89,11 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Real-Time Stream**: Server-Sent Events (SSE) stream (`/api/v1/notifications/stream`) pushes live pop-up alerts and badge notifications for critical AI emergency triage cases, low-stock / stock-out reorder thresholds, and new prescription issuances without requiring manual page reloads.
 * **Notification Popover**: TopBar bell icon with live badge counter and interactive stream popover allowing single-click navigation to affected clinical or inventory modules.
 
+### 🩺 10. Patient Self-Service Web Portal (`/patient-portal`)
+* **Secure EHR Medical Hub**: Patient self-service portal accessible via unique Patient Code (`PAT-2026-001`) or NIC/Passport numbers.
+* **Active Rx & Allergy Overview**: View prescribed medications, dosages, prescribing clinicians, dispensing status, and allergy warnings.
+* **Follow-Up Consultation Request**: Interactive appointment booking form allowing patients to request follow-up consultations with specialized doctors online.
+
 ---
 
 ## 📂 System Folder Structure

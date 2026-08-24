@@ -7,6 +7,7 @@ import RbacMatrix from './components/RbacMatrix';
 import InteractiveDemo from './components/InteractiveDemo';
 import LoginModal from './components/LoginModal';
 import RegisterModal from './components/RegisterModal';
+import PatientPortalModal from './components/PatientPortalModal';
 import RolePortal from './components/RolePortal';
 import { Database, ShieldCheck, HeartPulse, BrainCircuit } from 'lucide-react';
 
@@ -90,6 +91,7 @@ export default function App() {
             aiRiskData={aiRiskData} 
             onOpenLogin={() => navigate('/login')}
             onOpenRegister={() => navigate('/register')}
+            onOpenPatientPortal={() => navigate('/patient-portal')}
           />
         )
       } />
@@ -101,7 +103,7 @@ export default function App() {
           <>
             <LandingView 
               theme={theme} setTheme={setTheme} backendStatus={backendStatus} aiRiskData={aiRiskData}
-              onOpenLogin={() => {}} onOpenRegister={() => navigate('/register')}
+              onOpenLogin={() => {}} onOpenRegister={() => navigate('/register')} onOpenPatientPortal={() => navigate('/patient-portal')}
             />
             <LoginModal 
               isOpen={true} 
@@ -119,7 +121,7 @@ export default function App() {
           <>
             <LandingView 
               theme={theme} setTheme={setTheme} backendStatus={backendStatus} aiRiskData={aiRiskData}
-              onOpenLogin={() => navigate('/login')} onOpenRegister={() => {}}
+              onOpenLogin={() => navigate('/login')} onOpenRegister={() => {}} onOpenPatientPortal={() => navigate('/patient-portal')}
             />
             <RegisterModal 
               isOpen={true} 
@@ -127,6 +129,19 @@ export default function App() {
             />
           </>
         )
+      } />
+
+      <Route path="/patient-portal" element={
+        <>
+          <LandingView 
+            theme={theme} setTheme={setTheme} backendStatus={backendStatus} aiRiskData={aiRiskData}
+            onOpenLogin={() => navigate('/login')} onOpenRegister={() => navigate('/register')} onOpenPatientPortal={() => {}}
+          />
+          <PatientPortalModal 
+            isOpen={true} 
+            onClose={() => navigate('/')} 
+          />
+        </>
       } />
 
       <Route path="/dashboard/*" element={
@@ -147,7 +162,7 @@ export default function App() {
   );
 }
 
-function LandingView({ theme, setTheme, backendStatus, aiRiskData, onOpenLogin, onOpenRegister }) {
+function LandingView({ theme, setTheme, backendStatus, aiRiskData, onOpenLogin, onOpenRegister, onOpenPatientPortal }) {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <Navbar 
@@ -155,6 +170,7 @@ function LandingView({ theme, setTheme, backendStatus, aiRiskData, onOpenLogin, 
         setTheme={setTheme} 
         onOpenLogin={onOpenLogin} 
         onOpenRegister={onOpenRegister} 
+        onOpenPatientPortal={onOpenPatientPortal}
         backendOnline={backendStatus.online}
       />
 

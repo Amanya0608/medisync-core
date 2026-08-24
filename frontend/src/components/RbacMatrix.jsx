@@ -43,16 +43,16 @@ export default function RbacMatrix({ onOpenLogin }) {
       ]
     },
     {
-      title: 'Inventory Manager',
-      email: 'inventory@medisync.health',
-      roleKey: 'inventory_manager',
+      title: 'Staff Nurse / Ward Care Officer',
+      email: 'nurse@medisync.health',
+      roleKey: 'nurse',
       color: 'var(--warning)',
-      badge: 'Procurement & Analytics',
+      badge: 'Patient Intake & Wards',
       permissions: [
-        'Manage Pharmaceutical Supplier Catalog',
-        'Review AI 30-Day Reorder Forecasts',
-        'Log Received Shipments & Stock Receipts',
-        'Generate Consumption Analytics Reports'
+        'Register & Edit Patient Records (EHR)',
+        'Manage Hospital Wards & Departments',
+        'Access Groq AI Symptom Triage',
+        'Export Executive Clinical Reports'
       ]
     }
   ];

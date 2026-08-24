@@ -274,9 +274,9 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
                 {[
                   { email: 'admin@medisync.health', label: 'Super Admin' },
-                  { email: 'pharmacist@medisync.health', label: 'Pharmacist' },
+                  { email: 'pharmacist@medisync.health', label: 'Chief Pharmacist' },
                   { email: 'doctor@medisync.health', label: 'Doctor' },
-                  { email: 'inventory@medisync.health', label: 'Inventory Mgr' },
+                  { email: 'nurse@medisync.health', label: 'Staff Nurse' },
                 ].map((sample, idx) => (
                   <button
                     key={idx}

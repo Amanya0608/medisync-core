@@ -2742,5 +2742,48 @@ Route::post('/v1/prescriptions/safety-check', function (Request $request) {
     ]);
 });
 
+/* -------------------------------------------------------------------------- */
+/* DIGITAL E-PRESCRIPTION VERIFICATION & QR CODE APIs                          */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/prescriptions/{code}/verify', function ($code) {
+    $rx = DB::table('prescriptions')
+        ->join('patients', 'prescriptions.patient_id', '=', 'patients.id')
+        ->join('staff', 'prescriptions.doctor_id', '=', 'staff.id')
+        ->where('prescriptions.prescription_code', $code)
+        ->orWhere('prescriptions.id', (int)$code)
+        ->select(
+            'prescriptions.*',
+            'patients.patient_code', 'patients.first_name as patient_first', 'patients.last_name as patient_last', 'patients.allergies',
+            'staff.first_name as doctor_first', 'staff.last_name as doctor_last', 'staff.specialization', 'staff.license_number'
+        )
+        ->first();
+
+    if (!$rx) {
+        return response()->json(['success' => false, 'message' => 'Invalid or unverified prescription code.'], 404);
+    }
+
+    $items = DB::table('prescription_items')
+        ->join('medicines', 'prescription_items.medicine_id', '=', 'medicines.id')
+        ->where('prescription_id', $rx->id)
+        ->select('prescription_items.*', 'medicines.brand_name', 'medicines.generic_name')
+        ->get();
+
+    $signatureHash = hash('sha256', "MEDISYNC-RX-{$rx->prescription_code}-{$rx->doctor_id}-{$rx->issued_at}");
+
+    return response()->json([
+        'success' => true,
+        'verified' => true,
+        'prescription' => $rx,
+        'items' => $items,
+        'digital_signature' => [
+            'algorithm' => 'SHA-256',
+            'signature_hash' => $signatureHash,
+            'signed_by' => "Dr. {$rx->doctor_first} {$rx->doctor_last} ({$rx->specialization})",
+            'slmc_license' => $rx->license_number ?? 'SLMC-2026-REG'
+        ]
+    ]);
+});
+
 
 

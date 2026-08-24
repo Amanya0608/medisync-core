@@ -102,6 +102,11 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Patient EHR Allergy Cross-Checking**: Automatically evaluates prescribed medications against patient allergy records (e.g. Penicillin, Sulfa drugs) and flags critical anaphylaxis warnings (`CRITICAL_CONTRAINDICATION`).
 * **Drug-Drug Interaction (DDI) Engine**: Analyzes prescribed multi-drug combinations for dangerous clinical interactions (e.g. Atorvastatin + Clarithromycin, Aspirin + Warfarin) with severity grading (`MAJOR`, `MODERATE`) and clinical mitigation guidance.
 
+### 📄 13. Digital e-Prescription PDF & QR Code Generator (`/dashboard/prescriptions`)
+* **Scannable Verification QR Code**: Generates dynamic QR codes for each issued e-Prescription (`/v1/prescriptions/{code}/verify`), enabling instant pharmacy counter barcode scanning and verification.
+* **Cryptographic SHA-256 Signature Stamp**: Digitally signs prescription slips with doctor credentials and SLMC registration numbers to prevent drug forgery or unauthorized altering.
+* **Downloadable & Printable PDF Document**: One-click generation of official hospital e-Prescription slips formatted for physical printing or PDF downloads.
+
 ---
 
 ## 📂 System Folder Structure

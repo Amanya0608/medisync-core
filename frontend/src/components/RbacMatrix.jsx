@@ -1,5 +1,5 @@
 import React from 'react';
-import { Shield, Key, Check, Lock, UserCheck } from 'lucide-react';
+import { Shield, Check, UserCheck, ArrowRight } from 'lucide-react';
 
 export default function RbacMatrix({ onOpenLogin }) {
   const roles = [
@@ -8,12 +8,12 @@ export default function RbacMatrix({ onOpenLogin }) {
       email: 'admin@medisync.health',
       roleKey: 'super_admin',
       color: 'var(--primary)',
-      badge: 'Full System Control',
+      badge: 'Super Control',
       permissions: [
-        'Access All 18 MySQL Relational Tables',
-        'Manage User Accounts & Assign RBAC Roles',
-        'Inspect System Security Audit Logs',
-        'Configure Department Wards & Suppliers'
+        'Access All 18 Relational Tables',
+        'Manage Users & Assign System Roles',
+        'Inspect Security Audit Logs',
+        'Manage Departments, Wards & Suppliers'
       ]
     },
     {
@@ -21,12 +21,12 @@ export default function RbacMatrix({ onOpenLogin }) {
       email: 'pharmacist@medisync.health',
       roleKey: 'pharmacist',
       color: 'var(--teal-accent)',
-      badge: 'Inventory & FEFO',
+      badge: 'FEFO Engine',
       permissions: [
         'Monitor FEFO Batch Expiry Timelines',
-        'Receive AI Expiry Risk Alerts & Transfer Recs',
-        'Process Prescription Drug Dispensing',
-        'Perform Inventory Stock Adjustments & Restocks'
+        'Receive AI Expiry Risk Alerts & Recs',
+        'Process Prescription Dispensing',
+        'Auto-Generate Low Stock Reorders'
       ]
     },
     {
@@ -34,71 +34,72 @@ export default function RbacMatrix({ onOpenLogin }) {
       email: 'doctor@medisync.health',
       roleKey: 'doctor',
       color: 'var(--success)',
-      badge: 'Clinical EHR & AI Triage',
+      badge: 'Clinical EHR & Triage',
       permissions: [
-        'Run AI Clinical Symptom Triage Assistant',
-        'Issue Electronic Prescriptions (E-Rx)',
-        'View Patient EHR Profiles & Allergy Alerts',
-        'Schedule Patient Consultations'
+        'Run AI Clinical Symptom Triage',
+        'Issue Digitally Signed E-Rx PDFs',
+        'Real-Time Drug Interaction Checks',
+        'WHO ICD-10 / ICD-11 Code Search'
       ]
     },
     {
-      title: 'Staff Nurse / Ward Care Officer',
+      title: 'Staff Nurse / Ward Care',
       email: 'nurse@medisync.health',
       roleKey: 'nurse',
       color: 'var(--warning)',
-      badge: 'Patient Intake & Wards',
+      badge: 'Intake & Wards',
       permissions: [
-        'Register & Edit Patient Records (EHR)',
-        'Manage Hospital Wards & Departments',
-        'Access Groq AI Symptom Triage',
+        'Register & Edit Patient EHR Records',
+        'Manage Hospital Wards & Consultations',
+        'Access AI Symptom Triage Tool',
         'Export Executive Clinical Reports'
       ]
     }
   ];
 
   return (
-    <section id="rbac" style={{ padding: '80px 32px', maxWidth: '1280px', margin: '0 auto' }}>
-      <div style={{ textAlign: 'center', marginBottom: '56px' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 14px', borderRadius: '20px', background: 'var(--primary-glow)', border: '1px solid var(--primary)', color: 'var(--primary)', fontSize: '0.82rem', fontWeight: '700', marginBottom: '16px' }}>
-          <Shield size={14} />
+    <section id="rbac" style={{ padding: '48px 24px', maxWidth: '1200px', margin: '0 auto' }}>
+      <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '16px', background: 'var(--primary-glow)', border: '1px solid var(--primary)', color: 'var(--primary)', fontSize: '0.76rem', fontWeight: '700', marginBottom: '10px' }}>
+          <Shield size={12} />
           <span>Role-Based Access Control (RBAC) Architecture</span>
         </div>
-        <h2 style={{ fontSize: '2.2rem', fontWeight: '800', marginBottom: '12px' }}>
-          Granular Role Access & Security
+        <h2 style={{ fontSize: '1.8rem', fontWeight: '800', marginBottom: '8px' }}>
+          Granular Role Security Matrix
         </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1rem', maxWidth: '640px', margin: '0 auto' }}>
-          MediSync enforces role-based security ensuring doctors, pharmacists, administrators, and inventory managers access only their authorized clinical and pharmacy modules.
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', maxWidth: '600px', margin: '0 auto' }}>
+          Enforces role-based security ensuring doctors, pharmacists, administrators, and nurses access authorized modules only.
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '16px' }}>
         {roles.map((r, idx) => (
-          <div key={idx} className="glass-panel glass-panel-hover" style={{ padding: '24px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+          <div key={idx} className="glass-panel glass-panel-hover" style={{ padding: '18px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', borderTop: `3px solid ${r.color}` }}>
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                 <div>
-                  <h3 style={{ fontSize: '1.15rem', fontWeight: '700' }}>{r.title}</h3>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.email}</span>
+                  <h3 style={{ fontSize: '0.98rem', fontWeight: '800' }}>{r.title}</h3>
+                  <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.email}</span>
                 </div>
-                <span className="badge badge-primary" style={{ borderColor: r.color, color: r.color }}>
+                <span className="badge badge-primary" style={{ borderColor: r.color, color: r.color, background: 'rgba(255,255,255,0.03)', fontSize: '0.64rem' }}>
                   {r.badge}
                 </span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '18px' }}>
                 {r.permissions.map((p, pIdx) => (
-                  <div key={pIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.85rem' }}>
-                    <Check size={16} color={r.color} style={{ marginTop: '2px', flexShrink: 0 }} />
+                  <div key={pIdx} style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', fontSize: '0.78rem' }}>
+                    <Check size={14} color={r.color} style={{ marginTop: '1px', flexShrink: 0 }} />
                     <span style={{ color: 'var(--text-main)' }}>{p}</span>
                   </div>
                 ))}
               </div>
             </div>
 
-            <button onClick={() => onOpenLogin(r.roleKey)} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center' }}>
-              <UserCheck size={16} />
-              <span>Login as {r.title.split(' ')[0]}</span>
+            <button onClick={() => onOpenLogin(r.roleKey)} className="btn btn-secondary" style={{ width: '100%', justifyContent: 'center', borderColor: r.color, color: r.color, padding: '6px 12px', fontSize: '0.78rem' }}>
+              <UserCheck size={14} />
+              <span>Launch {r.title}</span>
+              <ArrowRight size={12} />
             </button>
           </div>
         ))}

@@ -108,6 +108,26 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [liveToastAlert, setLiveToastAlert] = useState(null);
 
+  // Persistent Notification Dismissal Tracking
+  const [dismissedIds, setDismissedIds] = useState(() => {
+    try {
+      const saved = localStorage.getItem('medisync_dismissed_notifications');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  const dismissNotification = (id) => {
+    setDismissedIds(prev => {
+      const updated = [...new Set([...prev, id])];
+      try {
+        localStorage.setItem('medisync_dismissed_notifications', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+  };
+
   // Cold-Chain Storage & Temperature Logging State
   const [coldChainLogs, setColdChainLogs] = useState([]);
   const [coldChainSummary, setColdChainSummary] = useState({ normal: 0, breach: 0 });
@@ -930,8 +950,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
-          setNotificationsList(data.notifications || []);
-          setUnreadNotificationsCount(data.unread_count || 0);
+          const rawNotifications = data.notifications || [];
+          const savedDismissed = JSON.parse(localStorage.getItem('medisync_dismissed_notifications') || '[]');
+          const activeNotifications = rawNotifications.filter(n => !savedDismissed.includes(n.id) && !dismissedIds.includes(n.id));
+          setNotificationsList(activeNotifications);
+          setUnreadNotificationsCount(activeNotifications.length);
         }
       }
     } catch (err) {
@@ -955,12 +978,18 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         try {
           const payload = JSON.parse(e.data);
           if (payload && payload.latest_emergency) {
-            setLiveToastAlert({
-              title: '🚨 Critical AI Emergency Triage',
-              message: `Patient triage evaluated: ${payload.latest_emergency.recommended_department}`,
-              severity: 'danger',
-              link: 'ai_triage'
-            });
+            const toastId = `triage-${payload.latest_emergency.id}`;
+            const savedDismissed = JSON.parse(localStorage.getItem('medisync_dismissed_notifications') || '[]');
+            if (!savedDismissed.includes(toastId) && !savedDismissed.includes(`toast-${toastId}`) && !dismissedIds.includes(toastId)) {
+              setLiveToastAlert({
+                id: `toast-${toastId}`,
+                originalId: toastId,
+                title: '🚨 Critical AI Emergency Triage',
+                message: `Patient triage evaluated: ${payload.latest_emergency.recommended_department}`,
+                severity: 'danger',
+                link: 'ai_triage'
+              });
+            }
             fetchNotificationsData();
           }
         } catch (err) {
@@ -2106,7 +2135,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                     <span>Live Notification Stream</span>
                   </div>
                   <button 
-                    onClick={() => { setNotificationsList([]); setUnreadNotificationsCount(0); }} 
+                    onClick={() => {
+                      const allIds = notificationsList.map(n => n.id);
+                      allIds.forEach(id => dismissNotification(id));
+                      setNotificationsList([]);
+                      setUnreadNotificationsCount(0);
+                    }} 
                     style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                   >
                     <CheckCheck size={14} />
@@ -2123,28 +2157,49 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                     {notificationsList.map((n) => (
                       <div 
                         key={n.id} 
-                        onClick={() => {
-                          handleTabChange(n.link);
-                          setShowNotificationsDropdown(false);
-                        }}
                         style={{
                           padding: '10px 12px',
                           borderRadius: '8px',
                           background: n.severity === 'danger' ? 'rgba(239, 68, 68, 0.1)' : (n.severity === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(56, 189, 248, 0.1)'),
                           borderLeft: `4px solid ${n.severity === 'danger' ? 'var(--danger)' : (n.severity === 'warning' ? 'var(--warning)' : 'var(--teal-accent)')}`,
                           cursor: 'pointer',
-                          transition: 'all 0.2s ease'
+                          transition: 'all 0.2s ease',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'flex-start',
+                          gap: '8px'
                         }}
                       >
-                        <div style={{ fontWeight: '700', fontSize: '0.82rem', marginBottom: '2px', color: 'var(--text-main)' }}>
-                          {n.title}
+                        <div 
+                          onClick={() => {
+                            dismissNotification(n.id);
+                            handleTabChange(n.link);
+                            setShowNotificationsDropdown(false);
+                          }}
+                          style={{ flex: 1 }}
+                        >
+                          <div style={{ fontWeight: '700', fontSize: '0.82rem', marginBottom: '2px', color: 'var(--text-main)' }}>
+                            {n.title}
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                            {n.message}
+                          </div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right', fontFamily: 'monospace' }}>
+                            {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </div>
                         </div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
-                          {n.message}
-                        </div>
-                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right', fontFamily: 'monospace' }}>
-                          {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            dismissNotification(n.id);
+                            setNotificationsList(prev => prev.filter(item => item.id !== n.id));
+                            setUnreadNotificationsCount(prev => Math.max(0, prev - 1));
+                          }}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '2px' }}
+                          title="Dismiss notification"
+                        >
+                          <X size={14} />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -7542,6 +7597,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
               <button 
                 onClick={() => {
+                  if (liveToastAlert) {
+                    if (liveToastAlert.id) dismissNotification(liveToastAlert.id);
+                    if (liveToastAlert.originalId) dismissNotification(liveToastAlert.originalId);
+                  }
                   handleTabChange(liveToastAlert.link);
                   setLiveToastAlert(null);
                 }} 
@@ -7551,7 +7610,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 Inspect Module
               </button>
               <button 
-                onClick={() => setLiveToastAlert(null)} 
+                onClick={() => {
+                  if (liveToastAlert) {
+                    if (liveToastAlert.id) dismissNotification(liveToastAlert.id);
+                    if (liveToastAlert.originalId) dismissNotification(liveToastAlert.originalId);
+                  }
+                  setLiveToastAlert(null);
+                }} 
                 className="btn btn-secondary" 
                 style={{ padding: '4px 10px', fontSize: '0.75rem' }}
               >

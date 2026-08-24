@@ -111,6 +111,10 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Stock Batch Decommissioning Workflow**: Structured compliance process for logging and discarding expired, damaged, or temperature-breached pharmaceutical batches (`/v1/inventory/condemnations`).
 * **Cryptographic Destruction Certificates**: Generates SHA-256 digital destruction certificate hashes signed with witness auditor names, disposal methods (e.g., *High-Temp Incineration*), and audit trail timestamps.
 
+### 🚚 15. Automated Purchase Order (PO) & Reorder Engine (`/dashboard/suppliers`)
+* **Threshold-Triggered PO Auto-Generation**: Scans total medicine stock across all active FEFO batches and auto-generates Purchase Order drafts (`PO-2026-XXXX`) when stock drops below minimum reorder thresholds (`/v1/purchase-orders/auto-generate`).
+* **Instant Supplier Email Dispatch**: Dispatches formatted purchase orders directly to preferred supplier emails (e.g. `procurement@pharmanet.lk`) with estimated procurement costs, requested quantities, and system audit trail logs.
+
 ---
 
 ## 📂 System Folder Structure

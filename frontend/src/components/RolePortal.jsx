@@ -138,6 +138,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     notes: ''
   });
 
+  // Automated Purchase Order (PO) & Reorder Engine State
+  const [purchaseOrdersList, setPurchaseOrdersList] = useState([]);
+  const [poSummary, setPoSummary] = useState({ total_pos: 0, total_value: 0 });
+  const [supplierSubTab, setSupplierSubTab] = useState('directory'); // 'directory' or 'po'
+  const [isAutoGeneratingPO, setIsAutoGeneratingPO] = useState(false);
+
   // Sidebar Categorization Collapsed State
   const [collapsedGroups, setCollapsedGroups] = useState({
     overview: false,
@@ -859,6 +865,46 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     }
   };
 
+  const fetchPurchaseOrdersData = async () => {
+    try {
+      const res = await fetch('/api/v1/purchase-orders');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setPurchaseOrdersList(data.purchase_orders || []);
+          setPoSummary({
+            total_pos: data.total_pos_count || 0,
+            total_value: data.total_procurement_value || 0
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Purchase orders fetch error:', err);
+    }
+  };
+
+  const handleAutoGeneratePOs = async () => {
+    setIsAutoGeneratingPO(true);
+    try {
+      const res = await fetch('/api/v1/purchase-orders/auto-generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const data = await res.json();
+      setIsAutoGeneratingPO(false);
+      if (res.ok && data.success) {
+        fetchPurchaseOrdersData();
+        alert(`⚡ ${data.message}`);
+      } else {
+        alert(data.message || 'Error auto-generating purchase orders.');
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAutoGeneratingPO(false);
+      alert('Network error auto-generating purchase orders.');
+    }
+  };
+
   const fetchNotificationsData = async () => {
     try {
       const res = await fetch('/api/v1/notifications');
@@ -879,6 +925,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     fetchNotificationsData();
     fetchColdChainLogsData();
     fetchCondemnationsData();
+    fetchPurchaseOrdersData();
 
     // Setup Live SSE Stream Connection
     let eventSource;
@@ -4764,6 +4811,161 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
+        {/* TAB: SUPPLIERS & AUTOMATED PURCHASE ORDER ENGINE */}
+        {activeTab === 'suppliers' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '16px' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>REGISTERED SUPPLIERS</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{suppliersList.length || 4} Preferred Vendors</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>PURCHASE ORDERS ISSUED</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--teal-accent)', marginTop: '4px' }}>{poSummary.total_pos} POs Sent</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL PROCUREMENT VALUE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>LKR {poSummary.total_value.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+              </div>
+              <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>AUTO-REORDER ENGINE</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Sparkles size={20} />
+                  <span>Active</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+              <div style={{ display: 'flex', gap: '8px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '10px' }}>
+                <button
+                  onClick={() => setSupplierSubTab('directory')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: supplierSubTab === 'directory' ? 'var(--primary)' : 'transparent',
+                    color: supplierSubTab === 'directory' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Truck size={16} />
+                  <span>Suppliers Directory</span>
+                </button>
+                <button
+                  onClick={() => setSupplierSubTab('po')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: supplierSubTab === 'po' ? 'var(--primary)' : 'transparent',
+                    color: supplierSubTab === 'po' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Send size={16} />
+                  <span>Automated Purchase Orders ({purchaseOrdersList.length})</span>
+                </button>
+              </div>
+
+              <button 
+                onClick={handleAutoGeneratePOs} 
+                disabled={isAutoGeneratingPO}
+                className="btn btn-primary" 
+                style={{ background: 'var(--teal-accent)', color: '#000', padding: '8px 16px', fontSize: '0.85rem' }}
+              >
+                <Sparkles size={16} />
+                <span>{isAutoGeneratingPO ? 'Scanning Stock Levels...' : 'Scan & Auto-Generate Low-Stock POs'}</span>
+              </button>
+            </div>
+
+            {supplierSubTab === 'directory' && (
+              <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                      <th style={{ padding: '14px 16px' }}>SUPPLIER NAME</th>
+                      <th style={{ padding: '14px 16px' }}>CODE</th>
+                      <th style={{ padding: '14px 16px' }}>PREFERRED EMAIL FOR POS</th>
+                      <th style={{ padding: '14px 16px' }}>PHONE & ADDRESS</th>
+                      <th style={{ padding: '14px 16px' }}>STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(suppliersList.length > 0 ? suppliersList : [
+                      { id: 1, name: 'PharmaNet Lanka Distributors', supplier_code: 'SUP-001', email: 'procurement@pharmanet.lk', contact_phone: '+94 11 234 5678', address: 'No. 45 Galle Road, Colombo 03', status: 'ACTIVE' },
+                      { id: 2, name: 'Apex BioMed Supplies', supplier_code: 'SUP-002', email: 'orders@apexbio.com', contact_phone: '+94 11 987 6543', address: 'Industrial Zone, Kaduwela', status: 'ACTIVE' },
+                      { id: 3, name: 'Global Vaccine & Biologics Ltd', supplier_code: 'SUP-003', email: 'coldchain@globalvaccines.org', contact_phone: '+94 11 555 4321', address: 'Port City Healthcare Hub, Colombo', status: 'ACTIVE' }
+                    ]).map(s => (
+                      <tr key={s.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px 16px', fontWeight: '800', color: 'var(--primary)' }}>{s.company_name || s.name}</td>
+                        <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: '700' }}>{s.supplier_code}</td>
+                        <td style={{ padding: '14px 16px', color: 'var(--teal-accent)', fontWeight: '700' }}>{s.email}</td>
+                        <td style={{ padding: '14px 16px', color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                          <div>{s.phone || s.contact_phone}</div>
+                          <div>{s.address}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span className="badge badge-success" style={{ background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)' }}>
+                            PREFERRED
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {supplierSubTab === 'po' && (
+              <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                      <th style={{ padding: '14px 16px' }}>PO NUMBER</th>
+                      <th style={{ padding: '14px 16px' }}>MEDICINE REORDERED</th>
+                      <th style={{ padding: '14px 16px' }}>SUPPLIER VENDOR</th>
+                      <th style={{ padding: '14px 16px' }}>QTY REQUESTED</th>
+                      <th style={{ padding: '14px 16px' }}>ESTIMATED COST</th>
+                      <th style={{ padding: '14px 16px' }}>SUPPLIER EMAIL DISPATCH</th>
+                      <th style={{ padding: '14px 16px' }}>STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchaseOrdersList.map(po => (
+                      <tr key={po.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: '800', color: 'var(--primary)' }}>
+                          {po.po_number}
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ fontWeight: '700' }}>{po.brand_name}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{po.generic_name}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', fontWeight: '600' }}>{po.supplier_name}</td>
+                        <td style={{ padding: '14px 16px', fontWeight: '800', color: 'var(--success)', fontSize: '1rem' }}>
+                          +{po.requested_quantity} {po.unit || 'units'}
+                        </td>
+                        <td style={{ padding: '14px 16px', fontWeight: '700', color: 'var(--text-main)' }}>
+                          LKR {parseFloat(po.estimated_cost).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td style={{ padding: '14px 16px', fontSize: '0.82rem', color: 'var(--teal-accent)', fontWeight: '700' }}>
+                          {po.supplier_email}
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span className="badge badge-success" style={{ background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)', fontSize: '0.75rem' }}>
+                            ✓ SENT TO SUPPLIER
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* TAB: PERMISSIONS & ROLE-PERMISSION MATRIX CRUD */}
         {activeTab === 'permissions' && (

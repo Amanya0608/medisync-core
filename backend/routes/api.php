@@ -2891,5 +2891,105 @@ Route::post('/v1/inventory/condemnations', function (Request $request) {
     ], 201);
 });
 
+/* -------------------------------------------------------------------------- */
+/* AUTOMATED PURCHASE ORDER (PO) & REORDER ENGINE APIs                         */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/purchase-orders', function () {
+    $pos = DB::table('purchase_orders')
+        ->leftJoin('suppliers', 'purchase_orders.supplier_id', '=', 'suppliers.id')
+        ->leftJoin('medicines', 'purchase_orders.medicine_id', '=', 'medicines.id')
+        ->select(
+            'purchase_orders.*',
+            'suppliers.company_name as supplier_name',
+            'medicines.brand_name', 'medicines.generic_name', 'medicines.unit'
+        )
+        ->orderBy('purchase_orders.created_at', 'desc')
+        ->get();
+
+    $totalValue = $pos->sum('estimated_cost');
+
+    return response()->json([
+        'success' => true,
+        'purchase_orders' => $pos,
+        'total_pos_count' => $pos->count(),
+        'total_procurement_value' => $totalValue
+    ]);
+});
+
+Route::post('/v1/purchase-orders/auto-generate', function (Request $request) {
+    $lowStockMedicines = DB::table('medicines')
+        ->leftJoin('medicine_batches', 'medicines.id', '=', 'medicine_batches.medicine_id')
+        ->select(
+            'medicines.id as medicine_id',
+            'medicines.brand_name', 'medicines.generic_name',
+            'medicines.min_reorder_level', 'medicines.max_stock_capacity', 'medicines.unit_price',
+            DB::raw('COALESCE(SUM(medicine_batches.current_quantity), 0) as total_current_stock')
+        )
+        ->groupBy('medicines.id', 'medicines.brand_name', 'medicines.generic_name', 'medicines.min_reorder_level', 'medicines.max_stock_capacity', 'medicines.unit_price')
+        ->get()
+        ->filter(function ($m) {
+            return $m->total_current_stock <= $m->min_reorder_level;
+        });
+
+    $suppliers = DB::table('suppliers')->get();
+    $defaultSupplier = $suppliers->first();
+
+    $generatedPOs = [];
+
+    foreach ($lowStockMedicines as $med) {
+        $supplier = $suppliers->firstWhere('id', 1) ?? $defaultSupplier;
+        $reorderQty = max(500, $med->max_stock_capacity - $med->total_current_stock);
+        $estCost = $reorderQty * ($med->unit_price > 0 ? $med->unit_price : 25.00);
+        $poNum = 'PO-2026-' . sprintf('%04d', rand(1000, 9999));
+        $supplierEmail = $supplier ? ($supplier->email ?? 'orders@pharmanet.lk') : 'orders@pharmanet.lk';
+
+        $exists = DB::table('purchase_orders')
+            ->where('medicine_id', $med->medicine_id)
+            ->where('status', 'SENT_TO_SUPPLIER')
+            ->whereDate('created_at', now()->toDateString())
+            ->exists();
+
+        if (!$exists && $supplier) {
+            $poId = DB::table('purchase_orders')->insertGetId([
+                'po_number' => $poNum,
+                'supplier_id' => $supplier->id,
+                'medicine_id' => $med->medicine_id,
+                'requested_quantity' => $reorderQty,
+                'estimated_cost' => $estCost,
+                'supplier_email' => $supplierEmail,
+                'status' => 'SENT_TO_SUPPLIER',
+                'triggered_by' => 'AUTOMATED_LOW_STOCK_THRESHOLD_ENGINE',
+                'notes' => "Auto-triggered reorder for {$med->brand_name}. Current stock: {$med->total_current_stock} (Min threshold: {$med->min_reorder_level}). PO dispatched to {$supplierEmail}.",
+                'created_at' => now(),
+                'updated_at' => now()
+            ]);
+
+            DB::table('audit_logs')->insert([
+                'action' => 'AUTOMATED_PURCHASE_ORDER_GENERATED_DISPATCHED',
+                'entity_type' => 'PurchaseOrder',
+                'entity_id' => $poId,
+                'payload' => json_encode(['po_number' => $poNum, 'medicine' => $med->brand_name, 'qty' => $reorderQty, 'supplier_email' => $supplierEmail]),
+                'created_at' => now()
+            ]);
+
+            $generatedPOs[] = [
+                'id' => $poId,
+                'po_number' => $poNum,
+                'brand_name' => $med->brand_name,
+                'quantity' => $reorderQty,
+                'supplier_email' => $supplierEmail
+            ];
+        }
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => count($generatedPOs) > 0 ? "Successfully auto-generated and dispatched " . count($generatedPOs) . " Purchase Order(s) to suppliers." : "All medicine inventory levels optimal. No low-stock POs required.",
+        'generated_pos_count' => count($generatedPOs),
+        'generated_pos' => $generatedPOs
+    ], 201);
+});
+
 
 

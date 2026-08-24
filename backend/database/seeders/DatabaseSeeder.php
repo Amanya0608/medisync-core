@@ -415,6 +415,21 @@ class DatabaseSeeder extends Seeder
             'updated_at' => now()->subHours(1)
         ]);
 
+        // 13. Automated Purchase Orders (PO)
+        DB::table('purchase_orders')->insert([
+            'po_number' => 'PO-2026-8801',
+            'supplier_id' => $supplierId,
+            'medicine_id' => $medAmox,
+            'requested_quantity' => 1000,
+            'estimated_cost' => 45000.00,
+            'supplier_email' => 'procurement@pharmanet.lk',
+            'status' => 'SENT_TO_SUPPLIER',
+            'triggered_by' => 'AUTOMATED_LOW_STOCK_THRESHOLD_ENGINE',
+            'notes' => 'Auto-triggered purchase order for Amoxil 500mg as stock reached low-stock threshold (240 units). Dispatched to procurement@pharmanet.lk.',
+            'created_at' => now()->subHours(2),
+            'updated_at' => now()->subHours(2)
+        ]);
+
         // 10. Audit Log
         DB::table('audit_logs')->insert([
             'user_id' => $adminUserId,
@@ -423,7 +438,7 @@ class DatabaseSeeder extends Seeder
             'entity_id' => 1,
             'ip_address' => '127.0.0.1',
             'user_agent' => 'MediSync Enterprise Seeder v1.0',
-            'payload' => json_encode(['tables_seeded' => 20, 'status' => 'SUCCESS']),
+            'payload' => json_encode(['tables_seeded' => 21, 'status' => 'SUCCESS']),
             'created_at' => now()
         ]);
     }

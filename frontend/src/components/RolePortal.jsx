@@ -6,7 +6,7 @@ import {
   AlertCircle, ChevronRight, Stethoscope, HeartPulse, Clock,
   Bot, AlertTriangle, Sparkles, Package, Pill, Layers, FileText,
   BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator, Send, MessageSquare, Check, Printer, User, Camera, Upload, ChevronDown, Settings,
-  Bell, BellRing, CheckCheck
+  Bell, BellRing, CheckCheck, Thermometer
 } from 'lucide-react';
 
 export default function RolePortal({ user, onLogout, theme, setTheme }) {
@@ -107,6 +107,19 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
   const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
   const [liveToastAlert, setLiveToastAlert] = useState(null);
+
+  // Cold-Chain Storage & Temperature Logging State
+  const [coldChainLogs, setColdChainLogs] = useState([]);
+  const [coldChainSummary, setColdChainSummary] = useState({ normal: 0, breach: 0 });
+  const [showLogTempModal, setShowLogTempModal] = useState(false);
+  const [tempForm, setTempForm] = useState({
+    batch_id: '',
+    sensor_location: 'Central Pharmacy Cold Storage Unit 1',
+    recorded_temp_celsius: '4.5',
+    min_threshold: '2.0',
+    max_threshold: '8.0',
+    notes: ''
+  });
 
   // Sidebar Categorization Collapsed State
   const [collapsedGroups, setCollapsedGroups] = useState({
@@ -709,6 +722,53 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   };
 
 
+  const fetchColdChainLogsData = async () => {
+    try {
+      const res = await fetch('/api/v1/cold-chain/logs');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setColdChainLogs(data.logs || []);
+          setColdChainSummary({ normal: data.normal_count || 0, breach: data.breach_count || 0 });
+        }
+      }
+    } catch (err) {
+      console.error('Cold chain fetch error:', err);
+    }
+  };
+
+  const handleLogTempSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/cold-chain/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tempForm)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShowLogTempModal(false);
+        setTempForm({
+          batch_id: '',
+          sensor_location: 'Central Pharmacy Cold Storage Unit 1',
+          recorded_temp_celsius: '4.5',
+          min_threshold: '2.0',
+          max_threshold: '8.0',
+          notes: ''
+        });
+        fetchColdChainLogsData();
+        if (data.status !== 'NORMAL') {
+          alert(`⚠️ CRITICAL COLD-CHAIN BREACH ALERT: Recorded ${data.recorded_temp}°C! Triggered temperature breach audit entry.`);
+        }
+      } else {
+        alert(data.message || 'Error logging cold-chain reading.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error logging cold-chain reading.');
+    }
+  };
+
   const fetchNotificationsData = async () => {
     try {
       const res = await fetch('/api/v1/notifications');
@@ -727,6 +787,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   useEffect(() => {
     fetchAllData();
     fetchNotificationsData();
+    fetchColdChainLogsData();
 
     // Setup Live SSE Stream Connection
     let eventSource;
@@ -4178,23 +4239,40 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <RefreshCw size={16} />
                   <span>Stock Movements Audit Log ({transactionsList.length})</span>
                 </button>
+                <button
+                  onClick={() => setBatchSubTab('cold_chain')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: batchSubTab === 'cold_chain' ? 'var(--primary)' : 'transparent',
+                    color: batchSubTab === 'cold_chain' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Thermometer size={16} />
+                  <span>Cold-Chain Temp Sensors ({coldChainLogs.length})</span>
+                </button>
               </div>
 
-              {batchSubTab === 'inventory' ? (
+              {batchSubTab === 'inventory' && (
                 <div style={{ display: 'flex', gap: '10px' }}>
                   <button onClick={() => setShowRecordTransactionModal(true)} className="btn btn-secondary" style={{ color: 'var(--teal-accent)', borderColor: 'var(--teal-accent)' }}>
                     <RefreshCw size={16} />
                     <span>Record Stock Movement</span>
                   </button>
                   <button onClick={() => setShowCreateBatchModal(true)} className="btn btn-primary">
-                    <Plus size={18} />
-                    <span>Intake New Stock Batch</span>
+                    <Plus size={16} />
+                    <span>Add New FEFO Batch</span>
                   </button>
                 </div>
-              ) : (
-                <button onClick={() => setShowRecordTransactionModal(true)} className="btn btn-primary">
-                  <RefreshCw size={18} />
-                  <span>Log New Stock Transaction</span>
+              )}
+
+              {batchSubTab === 'cold_chain' && (
+                <button onClick={() => setShowLogTempModal(true)} className="btn btn-primary" style={{ background: 'var(--teal-accent)', color: '#000' }}>
+                  <Thermometer size={16} />
+                  <span>Log Temperature Reading</span>
                 </button>
               )}
             </div>
@@ -4430,6 +4508,73 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                           </td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {batchSubTab === 'cold_chain' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                  <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--success)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>OPTIMAL TEMP STORAGE READINGS</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--success)', marginTop: '4px' }}>{coldChainSummary.normal} Optimal Readings</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>BREACHED SENSOR ALERTS</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <AlertTriangle size={18} />
+                      <span>{coldChainSummary.breach} Temperature Breaches</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px 16px', minWidth: '130px' }}>TIMESTAMP</th>
+                        <th style={{ padding: '14px 16px', minWidth: '160px' }}>BIOLOGIC MEDICINE</th>
+                        <th style={{ padding: '14px 16px', minWidth: '130px' }}>FEFO BATCH</th>
+                        <th style={{ padding: '14px 16px', minWidth: '220px' }}>SENSOR LOCATION</th>
+                        <th style={{ padding: '14px 16px', minWidth: '130px' }}>RECORDED TEMP</th>
+                        <th style={{ padding: '14px 16px', minWidth: '130px' }}>OPTIMAL RANGE</th>
+                        <th style={{ padding: '14px 16px', minWidth: '130px' }}>BREACH STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {coldChainLogs.map(log => {
+                        const isBreach = log.status !== 'NORMAL';
+                        return (
+                          <tr key={log.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '14px 16px', fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                              {new Date(log.created_at).toLocaleString([], { month: 'short', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td style={{ padding: '14px 16px', fontWeight: '700' }}>
+                              {log.brand_name}
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{log.generic_name}</div>
+                            </td>
+                            <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--primary)' }}>
+                              {log.batch_number}
+                            </td>
+                            <td style={{ padding: '14px 16px', color: 'var(--text-muted)' }}>
+                              {log.sensor_location}
+                            </td>
+                            <td style={{ padding: '14px 16px', fontWeight: '800', color: isBreach ? 'var(--danger)' : 'var(--success)', fontSize: '1rem' }}>
+                              {parseFloat(log.recorded_temp_celsius).toFixed(1)}°C
+                            </td>
+                            <td style={{ padding: '14px 16px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                              {parseFloat(log.min_threshold).toFixed(1)}°C - {parseFloat(log.max_threshold).toFixed(1)}°C
+                            </td>
+                            <td style={{ padding: '14px 16px' }}>
+                              <span className={`badge ${isBreach ? 'badge-danger' : 'badge-success'}`}>
+                                {log.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -6854,6 +6999,118 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 Dismiss
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* LOG COLD-CHAIN TEMPERATURE MODAL */}
+      {showLogTempModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '520px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowLogTempModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <div style={{ background: 'rgba(56, 189, 248, 0.15)', padding: '10px', borderRadius: '10px', color: 'var(--teal-accent)' }}>
+                <Thermometer size={22} />
+              </div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: '800' }}>Log Cold-Chain Storage Temperature</h3>
+            </div>
+
+            <form onSubmit={handleLogTempSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  TARGET FEFO BIOLOGIC BATCH *
+                </label>
+                <select 
+                  className="input-field" 
+                  required 
+                  value={tempForm.batch_id} 
+                  onChange={e => setTempForm({ ...tempForm, batch_id: e.target.value })}
+                >
+                  <option value="">-- Select Biologic / Cold Storage Batch --</option>
+                  {batchesList.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.brand_name} (Batch #{b.batch_number}) - Location: {b.storage_location || 'Cold Shelf'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  SENSOR / FRIDGE LOCATION *
+                </label>
+                <input 
+                  type="text" 
+                  required 
+                  className="input-field" 
+                  value={tempForm.sensor_location} 
+                  onChange={e => setTempForm({ ...tempForm, sensor_location: e.target.value })} 
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    RECORDED (°C) *
+                  </label>
+                  <input 
+                    type="number" 
+                    step="0.1" 
+                    required 
+                    className="input-field" 
+                    value={tempForm.recorded_temp_celsius} 
+                    onChange={e => setTempForm({ ...tempForm, recorded_temp_celsius: e.target.value })} 
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    MIN RANGE (°C)
+                  </label>
+                  <input 
+                    type="number" 
+                    step="0.1" 
+                    className="input-field" 
+                    value={tempForm.min_threshold} 
+                    onChange={e => setTempForm({ ...tempForm, min_threshold: e.target.value })} 
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    MAX RANGE (°C)
+                  </label>
+                  <input 
+                    type="number" 
+                    step="0.1" 
+                    className="input-field" 
+                    value={tempForm.max_threshold} 
+                    onChange={e => setTempForm({ ...tempForm, max_threshold: e.target.value })} 
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  INSPECTION NOTES / OBSERVATIONS
+                </label>
+                <textarea 
+                  className="input-field" 
+                  rows={2} 
+                  placeholder="e.g. Routine 4-hour temperature check. Digital sensor calibrated." 
+                  value={tempForm.notes} 
+                  onChange={e => setTempForm({ ...tempForm, notes: e.target.value })} 
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowLogTempModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ background: 'var(--teal-accent)', color: '#000' }}>Submit Reading</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

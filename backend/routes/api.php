@@ -2570,5 +2570,75 @@ Route::post('/v1/patient-portal/request-appointment', function (Request $request
     ], 201);
 });
 
+/* -------------------------------------------------------------------------- */
+/* COLD-CHAIN STORAGE & TEMPERATURE LOGGING APIs                              */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/cold-chain/logs', function () {
+    $logs = DB::table('cold_chain_logs')
+        ->join('medicine_batches', 'cold_chain_logs.batch_id', '=', 'medicine_batches.id')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->select('cold_chain_logs.*', 'medicine_batches.batch_number', 'medicines.brand_name', 'medicines.generic_name')
+        ->orderBy('cold_chain_logs.created_at', 'desc')
+        ->limit(30)
+        ->get();
+
+    $breachCount = $logs->where('status', '!=', 'NORMAL')->count();
+    $normalCount = $logs->where('status', 'NORMAL')->count();
+
+    return response()->json([
+        'success' => true,
+        'logs' => $logs,
+        'breach_count' => $breachCount,
+        'normal_count' => $normalCount
+    ]);
+});
+
+Route::post('/v1/cold-chain/logs', function (Request $request) {
+    $raw = json_decode($request->getContent(), true) ?? [];
+    $batchId = (int)($request->input('batch_id') ?? $raw['batch_id'] ?? 1);
+    $location = $request->input('sensor_location') ?? $raw['sensor_location'] ?? 'Cold Storage Unit 1 - Rack A';
+    $temp = (float)($request->input('recorded_temp_celsius') ?? $raw['recorded_temp_celsius'] ?? 4.5);
+    $min = (float)($request->input('min_threshold') ?? $raw['min_threshold'] ?? 2.0);
+    $max = (float)($request->input('max_threshold') ?? $raw['max_threshold'] ?? 8.0);
+    $notes = $request->input('notes') ?? $raw['notes'] ?? '';
+
+    $status = 'NORMAL';
+    if ($temp > $max) {
+        $status = 'BREACH_HIGH';
+    } else if ($temp < $min) {
+        $status = 'BREACH_LOW';
+    }
+
+    $logId = DB::table('cold_chain_logs')->insertGetId([
+        'batch_id' => $batchId,
+        'sensor_location' => $location,
+        'recorded_temp_celsius' => $temp,
+        'min_threshold' => $min,
+        'max_threshold' => $max,
+        'status' => $status,
+        'notes' => $notes ?: ($status !== 'NORMAL' ? "CRITICAL TEMPERATURE BREACH: Recorded {$temp}°C (Optimal: {$min}°C to {$max}°C)" : "Storage temperature optimal at {$temp}°C"),
+        'created_at' => now()
+    ]);
+
+    if ($status !== 'NORMAL') {
+        DB::table('audit_logs')->insert([
+            'action' => 'COLD_CHAIN_TEMPERATURE_BREACH_ALERT',
+            'entity_type' => 'ColdChainLog',
+            'entity_id' => $logId,
+            'payload' => json_encode(['batch_id' => $batchId, 'temp' => $temp, 'status' => $status, 'location' => $location]),
+            'created_at' => now()
+        ]);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => $status === 'NORMAL' ? 'Cold-chain temperature reading logged.' : 'CRITICAL ALERT: Cold-chain storage temperature breach recorded!',
+        'id' => $logId,
+        'status' => $status,
+        'recorded_temp' => $temp
+    ], 201);
+});
+
 
 

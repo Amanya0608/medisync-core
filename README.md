@@ -94,6 +94,10 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Active Rx & Allergy Overview**: View prescribed medications, dosages, prescribing clinicians, dispensing status, and allergy warnings.
 * **Follow-Up Consultation Request**: Interactive appointment booking form allowing patients to request follow-up consultations with specialized doctors online.
 
+### ❄️ 11. Cold-Chain Storage & Temperature Logging (`/dashboard/batches`)
+* **Biologics Temperature Tracking**: Digital temperature monitoring for cold-chain sensitive pharmaceuticals (vaccines, insulin, biologics) stored between 2.0°C and 8.0°C.
+* **Automated Breach Alerts**: Detects upper/lower temperature limit breaches (`BREACH_HIGH`, `BREACH_LOW`) and triggers security audit alerts (`COLD_CHAIN_TEMPERATURE_BREACH_ALERT`).
+
 ---
 
 ## 📂 System Folder Structure

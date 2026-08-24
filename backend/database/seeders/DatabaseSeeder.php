@@ -373,6 +373,29 @@ class DatabaseSeeder extends Seeder
             'created_at' => now(), 'updated_at' => now()
         ]);
 
+        // 11. Cold Chain Temperature Sensor Logs
+        DB::table('cold_chain_logs')->insert([
+            'batch_id' => $batchSafe,
+            'sensor_location' => 'Central Pharmacy Cold Room Unit 1 - Rack A',
+            'recorded_temp_celsius' => 4.2,
+            'min_threshold' => 2.0,
+            'max_threshold' => 8.0,
+            'status' => 'NORMAL',
+            'notes' => 'Storage temperature optimal at 4.2°C',
+            'created_at' => now()->subHours(3)
+        ]);
+
+        DB::table('cold_chain_logs')->insert([
+            'batch_id' => $batchHighRisk,
+            'sensor_location' => 'Central Pharmacy Vaccine Fridge 2',
+            'recorded_temp_celsius' => 9.8,
+            'min_threshold' => 2.0,
+            'max_threshold' => 8.0,
+            'status' => 'BREACH_HIGH',
+            'notes' => 'CRITICAL TEMPERATURE BREACH: Recorded 9.8°C (Optimal: 2.0°C to 8.0°C). Compressor inspection required.',
+            'created_at' => now()->subMinutes(25)
+        ]);
+
         // 10. Audit Log
         DB::table('audit_logs')->insert([
             'user_id' => $adminUserId,
@@ -381,7 +404,7 @@ class DatabaseSeeder extends Seeder
             'entity_id' => 1,
             'ip_address' => '127.0.0.1',
             'user_agent' => 'MediSync Enterprise Seeder v1.0',
-            'payload' => json_encode(['tables_seeded' => 18, 'status' => 'SUCCESS']),
+            'payload' => json_encode(['tables_seeded' => 19, 'status' => 'SUCCESS']),
             'created_at' => now()
         ]);
     }

@@ -2373,5 +2373,114 @@ Route::post('/v1/inventory-transactions', function (Request $request) {
     ], 201);
 });
 
+/* -------------------------------------------------------------------------- */
+/* REAL-TIME LIVE SSE NOTIFICATION CENTER & ALERTS                            */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/notifications', function () {
+    // 1. Critical AI Emergency Triage Cases
+    $emergencyTriages = DB::table('ai_symptom_triage_logs')
+        ->where('suggested_triage_level', 'Emergency')
+        ->orderBy('created_at', 'desc')
+        ->limit(5)
+        ->get()
+        ->map(function ($t) {
+            return [
+                'id' => 'triage-' . $t->id,
+                'category' => 'EMERGENCY_TRIAGE',
+                'title' => '🚨 Critical AI Emergency Triage Alert',
+                'message' => "Patient symptom triage requires immediate intervention in {$t->recommended_department}.",
+                'severity' => 'danger',
+                'timestamp' => $t->created_at,
+                'link' => 'ai_triage'
+            ];
+        });
+
+    // 2. Low Stock / Stock-out Batches
+    $lowStockBatches = DB::table('medicine_batches')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->where('medicine_batches.current_quantity', '<=', DB::raw('medicines.min_reorder_level'))
+        ->orWhere('medicine_batches.status', 'expired')
+        ->select('medicine_batches.*', 'medicines.brand_name', 'medicines.generic_name')
+        ->orderBy('medicine_batches.current_quantity', 'asc')
+        ->limit(5)
+        ->get()
+        ->map(function ($b) {
+            $isExpired = $b->status === 'expired' || strtotime($b->exp_date) < time();
+            return [
+                'id' => 'batch-' . $b->id,
+                'category' => 'LOW_STOCK',
+                'title' => $isExpired ? '⚠️ Expired Batch Stock Alert' : '⚡ Low Stock Reorder Threshold Alert',
+                'message' => "{$b->brand_name} ({$b->generic_name}) Batch #{$b->batch_number} has only {$b->current_quantity} units remaining.",
+                'severity' => $isExpired ? 'danger' : 'warning',
+                'timestamp' => $b->updated_at ?? $b->created_at,
+                'link' => 'batches'
+            ];
+        });
+
+    // 3. New Prescription Issued
+    $recentRx = DB::table('prescriptions')
+        ->join('patients', 'prescriptions.patient_id', '=', 'patients.id')
+        ->select('prescriptions.*', 'patients.first_name', 'patients.last_name')
+        ->orderBy('prescriptions.created_at', 'desc')
+        ->limit(5)
+        ->get()
+        ->map(function ($rx) {
+            $code = $rx->prescription_code ?? 'RX-2026';
+            return [
+                'id' => 'rx-' . $rx->id,
+                'category' => 'NEW_PRESCRIPTION',
+                'title' => '💊 New Clinical Prescription Issued',
+                'message' => "Rx #{$code} issued for patient {$rx->first_name} {$rx->last_name}.",
+                'severity' => 'info',
+                'timestamp' => $rx->created_at,
+                'link' => 'prescriptions'
+            ];
+        });
+
+    $all = collect([])->concat($emergencyTriages)->concat($lowStockBatches)->concat($recentRx);
+
+    return response()->json([
+        'success' => true,
+        'notifications' => $all->values(),
+        'unread_count' => $all->count()
+    ]);
+});
+
+Route::get('/v1/notifications/stream', function () {
+    return response()->stream(function () {
+        $emergency = DB::table('ai_symptom_triage_logs')
+            ->where('suggested_triage_level', 'Emergency')
+            ->orderBy('created_at', 'desc')
+            ->limit(3)
+            ->get();
+
+        $lowStock = DB::table('medicine_batches')
+            ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+            ->where('medicine_batches.current_quantity', '<=', DB::raw('medicines.min_reorder_level'))
+            ->select('medicine_batches.*', 'medicines.brand_name')
+            ->limit(3)
+            ->get();
+
+        $payload = [
+            'emergency_count' => $emergency->count(),
+            'low_stock_count' => $lowStock->count(),
+            'latest_emergency' => $emergency->first(),
+            'latest_low_stock' => $lowStock->first(),
+            'timestamp' => date('c')
+        ];
+
+        echo "event: message\n";
+        echo 'data: ' . json_encode($payload) . "\n\n";
+        if (ob_get_level() > 0) ob_flush();
+        flush();
+    }, 200, [
+        'Content-Type' => 'text/event-stream',
+        'Cache-Control' => 'no-cache, no-transform',
+        'Connection' => 'keep-alive',
+        'X-Accel-Buffering' => 'no'
+    ]);
+});
+
 
 

@@ -5,8 +5,8 @@ import {
   Search, Plus, RefreshCw, Database, Server, CheckCircle2, 
   AlertCircle, ChevronRight, Stethoscope, HeartPulse, Clock,
   Bot, AlertTriangle, Sparkles, Package, Pill, Layers, FileText,
-  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator, Send, MessageSquare, Check, Printer, User, Camera, Upload, ChevronDown, Settings
-
+  BrainCircuit, LogOut, Shield, UserCheck, Building2, Edit, Trash2, Key, UserPlus, X, Star, Truck, Calculator, Send, MessageSquare, Check, Printer, User, Camera, Upload, ChevronDown, Settings,
+  Bell, BellRing, CheckCheck
 } from 'lucide-react';
 
 export default function RolePortal({ user, onLogout, theme, setTheme }) {
@@ -101,6 +101,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [isSubmittingPassword, setIsSubmittingPassword] = useState(false);
+
+  // Real-Time SSE Notification Center State
+  const [notificationsList, setNotificationsList] = useState([]);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState(0);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  const [liveToastAlert, setLiveToastAlert] = useState(null);
 
   // Sidebar Categorization Collapsed State
   const [collapsedGroups, setCollapsedGroups] = useState({
@@ -703,8 +709,52 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   };
 
 
+  const fetchNotificationsData = async () => {
+    try {
+      const res = await fetch('/api/v1/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setNotificationsList(data.notifications || []);
+          setUnreadNotificationsCount(data.unread_count || 0);
+        }
+      }
+    } catch (err) {
+      console.error('Notifications fetch error:', err);
+    }
+  };
+
   useEffect(() => {
     fetchAllData();
+    fetchNotificationsData();
+
+    // Setup Live SSE Stream Connection
+    let eventSource;
+    try {
+      eventSource = new EventSource('/api/v1/notifications/stream');
+      eventSource.onmessage = (e) => {
+        try {
+          const payload = JSON.parse(e.data);
+          if (payload && payload.latest_emergency) {
+            setLiveToastAlert({
+              title: '🚨 Critical AI Emergency Triage',
+              message: `Patient triage evaluated: ${payload.latest_emergency.recommended_department}`,
+              severity: 'danger',
+              link: 'ai_triage'
+            });
+            fetchNotificationsData();
+          }
+        } catch (err) {
+          // Keep-alive or non-json message
+        }
+      };
+    } catch (err) {
+      console.error('SSE Stream error:', err);
+    }
+
+    return () => {
+      if (eventSource) eventSource.close();
+    };
   }, []);
 
   const hasPermission = (permissionKey) => {
@@ -1771,7 +1821,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          {/* Light / Dark Mode Toggle Button (Removed from sidebar) */}
+          {/* Light / Dark Mode Toggle Button */}
           <button 
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
             className="btn btn-secondary"
@@ -1782,8 +1832,107 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
           </button>
 
-          {/* System Live Connectivity Badge */}
-    
+          {/* Real-Time Live SSE Notification Center Bell Button */}
+          <div style={{ position: 'relative' }}>
+            <button 
+              onClick={() => {
+                setShowNotificationsDropdown(!showNotificationsDropdown);
+                if (unreadNotificationsCount > 0) {
+                  setUnreadNotificationsCount(0);
+                }
+              }}
+              className="btn btn-secondary"
+              style={{ padding: '8px 14px', fontSize: '0.82rem', borderRadius: '20px', position: 'relative', display: 'flex', alignItems: 'center', gap: '6px' }}
+              title="Live Notification Center"
+            >
+              {unreadNotificationsCount > 0 ? (
+                <BellRing size={16} color="var(--danger)" className="pulse-dot" />
+              ) : (
+                <Bell size={16} color="var(--primary)" />
+              )}
+              <span>Alerts</span>
+              {unreadNotificationsCount > 0 && (
+                <span style={{
+                  background: 'var(--danger)',
+                  color: '#fff',
+                  fontSize: '0.7rem',
+                  fontWeight: '800',
+                  padding: '2px 6px',
+                  borderRadius: '10px',
+                  marginLeft: '2px'
+                }}>
+                  {unreadNotificationsCount}
+                </span>
+              )}
+            </button>
+
+            {/* Notification Dropdown Popover */}
+            {showNotificationsDropdown && (
+              <div className="glass-panel" style={{
+                position: 'absolute',
+                right: 0,
+                top: '48px',
+                width: '360px',
+                maxHeight: '440px',
+                overflowY: 'auto',
+                padding: '16px',
+                zIndex: 1000,
+                boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+                border: '1px solid var(--border-color)',
+                backdropFilter: 'blur(16px)'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', paddingBottom: '10px', borderBottom: '1px solid var(--border-color)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '800', fontSize: '0.95rem' }}>
+                    <Bell size={16} color="var(--primary)" />
+                    <span>Live Notification Stream</span>
+                  </div>
+                  <button 
+                    onClick={() => { setNotificationsList([]); setUnreadNotificationsCount(0); }} 
+                    style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <CheckCheck size={14} />
+                    <span>Clear All</span>
+                  </button>
+                </div>
+
+                {notificationsList.length === 0 ? (
+                  <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    No unread notifications. All clinical & stock systems optimal.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {notificationsList.map((n) => (
+                      <div 
+                        key={n.id} 
+                        onClick={() => {
+                          handleTabChange(n.link);
+                          setShowNotificationsDropdown(false);
+                        }}
+                        style={{
+                          padding: '10px 12px',
+                          borderRadius: '8px',
+                          background: n.severity === 'danger' ? 'rgba(239, 68, 68, 0.1)' : (n.severity === 'warning' ? 'rgba(245, 158, 11, 0.1)' : 'rgba(56, 189, 248, 0.1)'),
+                          borderLeft: `4px solid ${n.severity === 'danger' ? 'var(--danger)' : (n.severity === 'warning' ? 'var(--warning)' : 'var(--teal-accent)')}`,
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <div style={{ fontWeight: '700', fontSize: '0.82rem', marginBottom: '2px', color: 'var(--text-main)' }}>
+                          {n.title}
+                        </div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+                          {n.message}
+                        </div>
+                        <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'right', fontFamily: 'monospace' }}>
+                          {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           <button onClick={fetchAllData} className="btn btn-secondary" style={{ padding: '8px', borderRadius: '50%' }} title="Refresh Data">
             <RefreshCw size={15} className={backendStatus.loading ? 'pulse-dot' : ''} />
@@ -6647,6 +6796,63 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
               <button onClick={() => setShowDeletePermissionModal(false)} className="btn btn-secondary">Cancel</button>
               <button onClick={handleDeletePermission} className="btn btn-primary" style={{ background: 'var(--danger)' }}>Delete Permission</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Live Toast Pop-Up Banner Alert */}
+      {liveToastAlert && (
+        <div style={{
+          position: 'fixed',
+          top: '70px',
+          right: '24px',
+          zIndex: 2000,
+          minWidth: '320px',
+          maxWidth: '400px',
+          padding: '16px 20px',
+          borderRadius: '12px',
+          background: 'rgba(15, 23, 42, 0.95)',
+          backdropFilter: 'blur(12px)',
+          border: `1px solid ${liveToastAlert.severity === 'danger' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(56, 189, 248, 0.5)'}`,
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          gap: '12px'
+        }}>
+          <div style={{
+            padding: '8px',
+            borderRadius: '8px',
+            background: liveToastAlert.severity === 'danger' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(56, 189, 248, 0.2)',
+            color: liveToastAlert.severity === 'danger' ? 'var(--danger)' : 'var(--teal-accent)'
+          }}>
+            <BellRing size={20} className="pulse-dot" />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: '800', fontSize: '0.9rem', marginBottom: '4px', color: '#fff' }}>
+              {liveToastAlert.title}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.4' }}>
+              {liveToastAlert.message}
+            </div>
+            <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+              <button 
+                onClick={() => {
+                  handleTabChange(liveToastAlert.link);
+                  setLiveToastAlert(null);
+                }} 
+                className="btn btn-primary" 
+                style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+              >
+                Inspect Module
+              </button>
+              <button 
+                onClick={() => setLiveToastAlert(null)} 
+                className="btn btn-secondary" 
+                style={{ padding: '4px 10px', fontSize: '0.75rem' }}
+              >
+                Dismiss
+              </button>
             </div>
           </div>
         </div>

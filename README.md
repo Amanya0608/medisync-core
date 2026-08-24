@@ -85,6 +85,10 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Profile Management**: Profile details, contact numbers, department assignments, and Base64 custom avatar uploading.
 * **Password Update**: Bcrypt hashing, dynamic color-coded password strength meter (`Weak`, `Fair`, `Strong`), and audit logging (`USER_PASSWORD_UPDATED`).
 
+### 🔔 9. Live SSE / Real-Time Notification Center (`TopBar Alerts`)
+* **Real-Time Stream**: Server-Sent Events (SSE) stream (`/api/v1/notifications/stream`) pushes live pop-up alerts and badge notifications for critical AI emergency triage cases, low-stock / stock-out reorder thresholds, and new prescription issuances without requiring manual page reloads.
+* **Notification Popover**: TopBar bell icon with live badge counter and interactive stream popover allowing single-click navigation to affected clinical or inventory modules.
+
 ---
 
 ## 📂 System Folder Structure

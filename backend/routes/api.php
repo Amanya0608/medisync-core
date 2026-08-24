@@ -154,15 +154,23 @@ Route::post('/v1/auth/verify-otp', function (Request $request) {
         'created_at' => now()
     ]);
 
+    $userPermissions = DB::table('role_permissions')
+        ->join('permissions', 'role_permissions.permission_id', '=', 'permissions.id')
+        ->where('role_permissions.role_id', $user->role_id)
+        ->pluck('permissions.name')
+        ->toArray();
+
     return response()->json([
         'success' => true,
         'user' => [
             'id' => $user->id,
+            'role_id' => $user->role_id,
             'name' => $user->name,
             'email' => $user->email,
             'roleKey' => $user->role_key,
             'role' => $user->role_name,
-            'department' => $user->department_name ?? 'Central Hospital'
+            'department' => $user->department_name ?? 'Central Hospital',
+            'permissions' => $userPermissions
         ]
     ]);
 });
@@ -1659,8 +1667,24 @@ Route::delete('/v1/admin/permissions/{id}', function ($id) {
 });
 
 Route::post('/v1/admin/role-permissions/toggle', function (Request $request) {
-    $roleId = (int)$request->input('role_id');
-    $permissionId = (int)$request->input('permission_id');
+    $content = $request->getContent();
+    $raw = json_decode($content, true) ?? [];
+    $roleId = (int)($request->input('role_id') ?? $raw['role_id'] ?? 0);
+    $permissionId = (int)($request->input('permission_id') ?? $raw['permission_id'] ?? 0);
+
+    if ($roleId === 0 && preg_match('/role_id\s*:\s*(\d+)/i', $content, $m1)) {
+        $roleId = (int)$m1[1];
+    }
+    if ($permissionId === 0 && preg_match('/permission_id\s*:\s*(\d+)/i', $content, $m2)) {
+        $permissionId = (int)$m2[1];
+    }
+
+    $roleExists = DB::table('roles')->where('id', $roleId)->exists();
+    $permExists = DB::table('permissions')->where('id', $permissionId)->exists();
+
+    if (!$roleExists || !$permExists) {
+        return response()->json(['success' => false, 'message' => 'Role or Permission not found in database.'], 404);
+    }
 
     $existing = DB::table('role_permissions')
         ->where('role_id', $roleId)

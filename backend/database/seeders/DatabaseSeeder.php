@@ -43,23 +43,27 @@ class DatabaseSeeder extends Seeder
 
         // 2. Permissions & Pivot
         $perms = [
-            ['name' => 'appointments.view', 'display_name' => 'View Clinical Appointments', 'module' => 'clinical'],
-            ['name' => 'appointments.manage', 'display_name' => 'Schedule & Manage Appointments', 'module' => 'clinical'],
-            ['name' => 'prescriptions.view', 'display_name' => 'View Electronic Prescriptions', 'module' => 'clinical'],
-            ['name' => 'prescriptions.issue', 'display_name' => 'Issue Electronic Prescriptions', 'module' => 'clinical'],
-            ['name' => 'patients.view', 'display_name' => 'View Patient Health Records (EHR)', 'module' => 'clinical'],
-            ['name' => 'patients.manage', 'display_name' => 'Register & Manage Patient EHR', 'module' => 'clinical'],
-            ['name' => 'inventory.view', 'display_name' => 'View Medicine Formulary & Categories', 'module' => 'inventory'],
             ['name' => 'inventory.manage', 'display_name' => 'Manage Medicine Inventory & Stock', 'module' => 'inventory'],
-            ['name' => 'batches.view', 'display_name' => 'View FEFO Stock Batches', 'module' => 'inventory'],
-            ['name' => 'batches.manage', 'display_name' => 'Intake & Manage FEFO Batches', 'module' => 'inventory'],
-            ['name' => 'suppliers.manage', 'display_name' => 'Manage Pharmaceutical Suppliers', 'module' => 'inventory'],
-            ['name' => 'transactions.view', 'display_name' => 'View Stock Intake & Dispensing Logs', 'module' => 'inventory'],
-            ['name' => 'ai.triage', 'display_name' => 'Access Groq AI Symptom Triage', 'module' => 'ai'],
-            ['name' => 'ai.override', 'display_name' => 'Clinician AI Recommendation Override', 'module' => 'ai'],
+            ['name' => 'prescriptions.issue', 'display_name' => 'Issue Electronic Prescriptions', 'module' => 'clinical'],
             ['name' => 'ai.analytics', 'display_name' => 'Access AI Expiry & FEFO Risk Intelligence', 'module' => 'ai'],
             ['name' => 'users.manage', 'display_name' => 'Manage System Users & Roles', 'module' => 'security'],
+            ['name' => 'roles.manage', 'display_name' => 'Configure System Roles & Access Matrix', 'module' => 'security'],
+            ['name' => 'patients.view', 'display_name' => 'View Patient Health Records (EHR)', 'module' => 'clinical'],
+            ['name' => 'patients.create', 'display_name' => 'Register & Edit Patient Records', 'module' => 'patients'],
+            ['name' => 'appointments.manage', 'display_name' => 'Schedule & Manage Appointments', 'module' => 'clinical'],
+            ['name' => 'medicines.manage', 'display_name' => 'Manage Medicine Formulary Catalog', 'module' => 'inventory'],
+            ['name' => 'batches.manage', 'display_name' => 'Intake & Manage FEFO Batches', 'module' => 'inventory'],
+            ['name' => 'suppliers.manage', 'display_name' => 'Manage Pharmaceutical Suppliers', 'module' => 'inventory'],
+            ['name' => 'ai.triage', 'display_name' => 'Access Groq AI Symptom Triage', 'module' => 'ai'],
             ['name' => 'departments.manage', 'display_name' => 'Manage Hospital Departments & Wards', 'module' => 'security'],
+            ['name' => 'reports.export', 'display_name' => 'Export Executive Clinical Reports', 'module' => 'security'],
+            ['name' => 'appointments.view', 'display_name' => 'View Clinical Appointments', 'module' => 'clinical'],
+            ['name' => 'prescriptions.view', 'display_name' => 'View Electronic Prescriptions', 'module' => 'clinical'],
+            ['name' => 'patients.manage', 'display_name' => 'Register & Manage Patient EHR', 'module' => 'clinical'],
+            ['name' => 'inventory.view', 'display_name' => 'View Medicine Formulary & Categories', 'module' => 'inventory'],
+            ['name' => 'batches.view', 'display_name' => 'View FEFO Stock Batches', 'module' => 'inventory'],
+            ['name' => 'transactions.view', 'display_name' => 'View Stock Intake & Dispensing Logs', 'module' => 'inventory'],
+            ['name' => 'ai.override', 'display_name' => 'Clinician AI Recommendation Override', 'module' => 'ai'],
             ['name' => 'staff.manage', 'display_name' => 'Manage Medical Staff Roster', 'module' => 'security'],
             ['name' => 'matrix.manage', 'display_name' => 'Manage Role-Permissions Access Matrix', 'module' => 'security'],
             ['name' => 'audit.view', 'display_name' => 'View System Audit Ledger Logs', 'module' => 'security'],
@@ -69,34 +73,37 @@ class DatabaseSeeder extends Seeder
             DB::table('permissions')->updateOrInsert(['name' => $p['name']], $p);
         }
 
-        // 1. Super Admin (ALL PERMISSIONS GRANTED)
+        // 1. Super Admin (ALL 24 PERMISSIONS GRANTED)
         $allPids = DB::table('permissions')->pluck('id');
         foreach ($allPids as $pid) {
             DB::table('role_permissions')->updateOrInsert(['role_id' => $adminRoleId, 'permission_id' => $pid]);
         }
 
-        // 2. Chief Pharmacist (Inventory, Batches, Suppliers, Dispensing Rx, AI Expiry Risk)
+        // 2. Chief Pharmacist (inventory.manage, ai.analytics, medicines.manage, batches.manage, suppliers.manage, reports.export, prescriptions.view, inventory.view, batches.view, transactions.view)
         $pharmPids = DB::table('permissions')->whereIn('name', [
-            'inventory.view', 'inventory.manage', 'batches.view', 'batches.manage',
-            'suppliers.manage', 'transactions.view', 'ai.analytics', 'prescriptions.view'
+            'inventory.manage', 'ai.analytics', 'medicines.manage', 'batches.manage',
+            'suppliers.manage', 'reports.export', 'prescriptions.view', 'inventory.view',
+            'batches.view', 'transactions.view'
         ])->pluck('id');
         foreach ($pharmPids as $pid) {
             DB::table('role_permissions')->updateOrInsert(['role_id' => $pharmacistRoleId, 'permission_id' => $pid]);
         }
 
-        // 3. Medical Officer / Doctor (Clinical Consultations, Rx Issue, EHR, AI Triage & Override)
+        // 3. Medical Officer / Doctor (prescriptions.issue, patients.view, patients.create, appointments.manage, ai.triage, appointments.view, prescriptions.view, patients.manage, inventory.view, ai.override)
         $docPids = DB::table('permissions')->whereIn('name', [
-            'appointments.view', 'appointments.manage', 'prescriptions.view', 'prescriptions.issue',
-            'patients.view', 'patients.manage', 'ai.triage', 'ai.override', 'inventory.view'
+            'prescriptions.issue', 'patients.view', 'patients.create', 'appointments.manage',
+            'ai.triage', 'appointments.view', 'prescriptions.view', 'patients.manage',
+            'inventory.view', 'ai.override'
         ])->pluck('id');
         foreach ($docPids as $pid) {
             DB::table('role_permissions')->updateOrInsert(['role_id' => $doctorRoleId, 'permission_id' => $pid]);
         }
 
-        // 4. Staff Nurse / Ward Care Officer (Patient Intake, Appointment Check-in, Ward Status, AI Triage)
+        // 4. Staff Nurse / Ward Care Officer (patients.view, patients.create, appointments.manage, suppliers.manage, ai.triage, departments.manage, reports.export, appointments.view, patients.manage)
         $nursePids = DB::table('permissions')->whereIn('name', [
-            'appointments.view', 'appointments.manage', 'patients.view', 'patients.manage',
-            'ai.triage', 'departments.manage'
+            'patients.view', 'patients.create', 'appointments.manage', 'suppliers.manage',
+            'ai.triage', 'departments.manage', 'reports.export', 'appointments.view',
+            'patients.manage'
         ])->pluck('id');
         foreach ($nursePids as $pid) {
             DB::table('role_permissions')->updateOrInsert(['role_id' => $nurseRoleId, 'permission_id' => $pid]);
@@ -126,9 +133,43 @@ class DatabaseSeeder extends Seeder
             'created_at' => now(), 'updated_at' => now()
         ]);
 
+        $pharmacistUserId = DB::table('users')->insertGetId([
+            'role_id' => $pharmacistRoleId,
+            'name' => 'Sarah Jenkins',
+            'email' => 'pharmacist@medisync.health',
+            'password' => Hash::make('password123'),
+            'status' => 'active',
+            'phone' => '+94 77 444 5566',
+            'created_at' => now(), 'updated_at' => now()
+        ]);
+
+        $pharmacistStaffId = DB::table('staff')->insertGetId([
+            'user_id' => $pharmacistUserId,
+            'department_id' => $pharmacyDeptId,
+            'employee_code' => 'EMP-PHARM-102',
+            'first_name' => 'Sarah',
+            'last_name' => 'Jenkins',
+            'specialization' => 'Chief Pharmacist & FEFO Specialist',
+            'license_number' => 'SLMC-PH-4421',
+            'phone' => '+94 77 444 5566',
+            'status' => 'on_duty',
+            'created_at' => now(), 'updated_at' => now()
+        ]);
+
         $doctorUserId = DB::table('users')->insertGetId([
             'role_id' => $doctorRoleId,
             'name' => 'Dr. Aris Thorne',
+            'email' => 'doctor@medisync.health',
+            'password' => Hash::make('password123'),
+            'status' => 'active',
+            'phone' => '+94 71 987 6543',
+            'created_at' => now(), 'updated_at' => now()
+        ]);
+
+        // Secondary doctor login alias for legacy compatibility
+        DB::table('users')->insertGetId([
+            'role_id' => $doctorRoleId,
+            'name' => 'Dr. Aris Thorne (Alias)',
             'email' => 'thorne@medisync.health',
             'password' => Hash::make('password123'),
             'status' => 'active',
@@ -145,6 +186,29 @@ class DatabaseSeeder extends Seeder
             'specialization' => 'Senior Cardiologist',
             'license_number' => 'SLMC-98712',
             'phone' => '+94 71 987 6543',
+            'status' => 'on_duty',
+            'created_at' => now(), 'updated_at' => now()
+        ]);
+
+        $nurseUserId = DB::table('users')->insertGetId([
+            'role_id' => $nurseRoleId,
+            'name' => 'Nurse Clara Barton',
+            'email' => 'nurse@medisync.health',
+            'password' => Hash::make('password123'),
+            'status' => 'active',
+            'phone' => '+94 71 333 8899',
+            'created_at' => now(), 'updated_at' => now()
+        ]);
+
+        $nurseStaffId = DB::table('staff')->insertGetId([
+            'user_id' => $nurseUserId,
+            'department_id' => $opdDeptId,
+            'employee_code' => 'EMP-NURSE-103',
+            'first_name' => 'Clara',
+            'last_name' => 'Barton',
+            'specialization' => 'Ward Lead & OPD Intake Nurse',
+            'license_number' => 'SLMC-NR-8819',
+            'phone' => '+94 71 333 8899',
             'status' => 'on_duty',
             'created_at' => now(), 'updated_at' => now()
         ]);

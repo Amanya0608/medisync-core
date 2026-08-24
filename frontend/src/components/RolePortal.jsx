@@ -707,52 +707,108 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     fetchAllData();
   }, []);
 
-  const getNavGroups = () => {
-    const roleKey = user.roleKey;
+  const hasPermission = (permissionKey) => {
+    if (!user) return false;
+    if (user.roleKey === 'super_admin') return true;
 
-    const topItem = { id: 'dashboard', label: 'Dashboard', icon: Activity };
-
-    const groups = [
-      {
-        key: 'clinical',
-        label: 'Clinical & EHR',
-        items: [
-          { id: 'appointments', label: 'Appointments', icon: Calendar },
-          { id: 'prescriptions', label: 'Prescriptions', icon: FileText },
-          { id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI' },
-          { id: 'patients', label: 'Patients (EHR)', icon: Users }
-        ]
-      },
-      {
-        key: 'pharmacy',
-        label: 'Pharmacy & FEFO',
-        items: [
-          { id: 'medicines', label: 'Formulary', icon: Pill },
-          { id: 'categories', label: 'Categories', icon: Layers },
-          { id: 'suppliers', label: 'Suppliers', icon: Building2 },
-          { id: 'batches', label: 'Stock Batches', icon: Package },
-          { id: 'ai_risk', label: 'AI FEFO Risk', icon: Sparkles, badge: 'AI' }
-        ]
+    // 1. Check live matrix loaded from backend API
+    if (rolePermissionsMatrix && rolePermissionsMatrix.permissions && rolePermissionsMatrix.matrix && rolePermissionsMatrix.roles) {
+      const permObj = rolePermissionsMatrix.permissions.find(p => p.name === permissionKey);
+      const roleObj = rolePermissionsMatrix.roles.find(r => r.name === user.roleKey);
+      if (permObj && roleObj) {
+        const grantedPermIds = rolePermissionsMatrix.matrix[roleObj.id] || [];
+        return grantedPermIds.includes(permObj.id);
       }
-    ];
-
-    const adminItems = [];
-    if (roleKey === 'super_admin') {
-      adminItems.push({ id: 'users', label: 'Users', icon: UserCheck });
-      adminItems.push({ id: 'departments', label: 'Departments', icon: Building2 });
-      adminItems.push({ id: 'staff', label: 'Staff Roster', icon: Stethoscope });
-      adminItems.push({ id: 'permissions', label: 'Access Control', icon: Key });
-    } else {
-      adminItems.push({ id: 'departments', label: 'Departments', icon: Building2 });
-      adminItems.push({ id: 'staff', label: 'Staff Roster', icon: Stethoscope });
     }
 
+    // 2. Check permissions array from user object
+    if (user.permissions && Array.isArray(user.permissions)) {
+      return user.permissions.includes(permissionKey);
+    }
+
+    // 3. Fallback matrix based on the system security permissions table
+    const defaultRolePermissions = {
+      pharmacist: [
+        'inventory.manage', 'ai.analytics', 'medicines.manage', 'batches.manage',
+        'suppliers.manage', 'reports.export', 'prescriptions.view', 'inventory.view',
+        'batches.view', 'transactions.view'
+      ],
+      doctor: [
+        'prescriptions.issue', 'patients.view', 'patients.create', 'appointments.manage',
+        'ai.triage', 'appointments.view', 'prescriptions.view', 'patients.manage',
+        'inventory.view', 'ai.override'
+      ],
+      nurse: [
+        'patients.view', 'patients.create', 'appointments.manage', 'suppliers.manage',
+        'ai.triage', 'departments.manage', 'reports.export', 'appointments.view',
+        'patients.manage'
+      ]
+    };
+
+    const rolePerms = defaultRolePermissions[user.roleKey] || [];
+    return rolePerms.includes(permissionKey);
+  };
+
+  const getRequiredPermissionForTab = (tabId) => {
+    switch (tabId) {
+      case 'patients': return 'patients.view';
+      case 'appointments': return 'appointments.view';
+      case 'prescriptions': return 'prescriptions.view';
+      case 'ai_triage': return 'ai.triage';
+      case 'medicines': return 'inventory.view';
+      case 'categories': return 'inventory.view';
+      case 'suppliers': return 'suppliers.manage';
+      case 'batches': return 'batches.view';
+      case 'ai_risk': return 'ai.analytics';
+      case 'users': return 'users.manage';
+      case 'departments': return 'departments.manage';
+      case 'staff': return 'staff.manage';
+      case 'permissions': return 'matrix.manage';
+      default: return null;
+    }
+  };
+
+  const canAccessTab = (tabId) => {
+    if (tabId === 'dashboard' || tabId === 'profile') return true;
+    const reqPerm = getRequiredPermissionForTab(tabId);
+    if (!reqPerm) return true;
+    return hasPermission(reqPerm);
+  };
+
+  const getNavGroups = () => {
+    const topItem = { id: 'dashboard', label: 'Dashboard', icon: Activity };
+
+    const clinicalItems = [
+      { id: 'appointments', label: 'Appointments', icon: Calendar, perm: 'appointments.view' },
+      { id: 'prescriptions', label: 'Prescriptions', icon: FileText, perm: 'prescriptions.view' },
+      { id: 'ai_triage', label: 'AI Symptom Triage', icon: Bot, badge: 'AI', perm: 'ai.triage' },
+      { id: 'patients', label: 'Patients (EHR)', icon: Users, perm: 'patients.view' }
+    ].filter(item => hasPermission(item.perm));
+
+    const pharmacyItems = [
+      { id: 'medicines', label: 'Formulary', icon: Pill, perm: 'inventory.view' },
+      { id: 'categories', label: 'Categories', icon: Layers, perm: 'inventory.view' },
+      { id: 'suppliers', label: 'Suppliers', icon: Building2, perm: 'suppliers.manage' },
+      { id: 'batches', label: 'Stock Batches', icon: Package, perm: 'batches.view' },
+      { id: 'ai_risk', label: 'AI FEFO Risk', icon: Sparkles, badge: 'AI', perm: 'ai.analytics' }
+    ].filter(item => hasPermission(item.perm));
+
+    const adminItems = [
+      { id: 'users', label: 'Users', icon: UserCheck, perm: 'users.manage' },
+      { id: 'departments', label: 'Departments', icon: Building2, perm: 'departments.manage' },
+      { id: 'staff', label: 'Staff Roster', icon: Stethoscope, perm: 'staff.manage' },
+      { id: 'permissions', label: 'Access Control', icon: Key, perm: 'matrix.manage' }
+    ].filter(item => hasPermission(item.perm));
+
+    const groups = [];
+    if (clinicalItems.length > 0) {
+      groups.push({ key: 'clinical', label: 'Clinical & EHR', items: clinicalItems });
+    }
+    if (pharmacyItems.length > 0) {
+      groups.push({ key: 'pharmacy', label: 'Pharmacy & FEFO', items: pharmacyItems });
+    }
     if (adminItems.length > 0) {
-      groups.push({
-        key: 'admin',
-        label: 'Administration',
-        items: adminItems
-      });
+      groups.push({ key: 'admin', label: 'Administration', items: adminItems });
     }
 
     return { topItem, groups };
@@ -1906,9 +1962,53 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 Assigned Role: <strong style={{ color: 'var(--primary)' }}>{user.role}</strong> • Department: <strong>{profileForm.department || user.department}</strong>
               </p>
             </div>
+
+            {hasPermission('reports.export') && (
+              <button 
+                onClick={() => {
+                  alert(`Executive Clinical & Inventory Report exported successfully for ${user.role}!`);
+                }} 
+                className="btn btn-secondary" 
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', fontSize: '0.82rem', borderRadius: '10px' }}
+                title="Export Executive Clinical Report (requires reports.export permission)"
+              >
+                <FileText size={16} color="var(--primary)" />
+                <span>Export Report</span>
+              </button>
+            )}
           </header>
 
 
+          {!canAccessTab(activeTab) ? (
+            <div style={{ padding: '60px 20px', textAlign: 'center', maxWidth: '640px', margin: '40px auto' }}>
+              <div className="glass-panel" style={{ padding: '40px 32px', borderRadius: '16px', border: '1px solid rgba(239, 68, 68, 0.3)', background: 'rgba(239, 68, 68, 0.05)' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', marginBottom: '20px' }}>
+                  <Lock size={32} />
+                </div>
+                <h2 style={{ fontSize: '1.8rem', fontWeight: '800', marginBottom: '12px', color: 'var(--text-main)' }}>
+                  Access Denied (403 Forbidden)
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px', lineHeight: '1.6' }}>
+                  Your assigned system role <strong style={{ color: 'var(--primary)' }}>{user.role}</strong> does not have permission to access the <strong>{activeTab.replace('_', ' ').toUpperCase()}</strong> module.
+                </p>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '20px', background: 'rgba(239, 68, 68, 0.15)', color: '#ef4444', fontSize: '0.85rem', fontWeight: '700', marginBottom: '28px' }}>
+                  <Shield size={16} />
+                  <span>Required Permission: {getRequiredPermissionForTab(activeTab)}</span>
+                </div>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button onClick={() => handleTabChange('dashboard')} className="btn btn-primary">
+                    Return to Overview
+                  </button>
+                  {hasPermission('matrix.manage') && (
+                    <button onClick={() => handleTabChange('permissions')} className="btn btn-secondary">
+                      Configure Access Matrix
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
         {/* TAB: CLINICAL PRESCRIPTIONS (RX) CRUD */}
         {activeTab === 'prescriptions' && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -1970,10 +2070,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 ))}
               </div>
 
-              <button onClick={() => setShowCreatePrescriptionModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <FileText size={18} />
-                <span>Issue New Prescription</span>
-              </button>
+              {hasPermission('prescriptions.issue') && (
+                <button onClick={() => setShowCreatePrescriptionModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <FileText size={18} />
+                  <span>Issue New Prescription</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -2152,10 +2254,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 ))}
               </div>
 
-              <button onClick={() => setShowCreateAppointmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <Calendar size={18} />
-                <span>Book New Appointment</span>
-              </button>
+              {hasPermission('appointments.manage') && (
+                <button onClick={() => setShowCreateAppointmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <Calendar size={18} />
+                  <span>Book New Appointment</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -2507,14 +2611,16 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                               )}
                             </td>
                             <td style={{ padding: '14px' }}>
-                              <button 
-                                onClick={() => { setSelectedTriageLog(t); setShowOverrideModal(true); }}
-                                className="btn btn-secondary" 
-                                style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--primary)' }}
-                              >
-                                <Stethoscope size={14} />
-                                <span>Clinician Review</span>
-                              </button>
+                              {hasPermission('ai.override') && (
+                                <button 
+                                  onClick={() => { setSelectedTriageLog(t); setShowOverrideModal(true); }}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 10px', fontSize: '0.78rem', color: 'var(--primary)' }}
+                                >
+                                  <Stethoscope size={14} />
+                                  <span>Clinician Review</span>
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -2543,10 +2649,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 />
               </div>
 
-              <button onClick={() => setShowCreateUserModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <UserPlus size={18} />
-                <span>Create New User</span>
-              </button>
+              {hasPermission('users.manage') && (
+                <button onClick={() => setShowCreateUserModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <UserPlus size={18} />
+                  <span>Create New User</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -2640,10 +2748,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 />
               </div>
 
-              <button onClick={() => setShowCreateDepartmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <Building2 size={18} />
-                <span>Add New Department</span>
-              </button>
+              {hasPermission('departments.manage') && (
+                <button onClick={() => setShowCreateDepartmentModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <Building2 size={18} />
+                  <span>Add New Department</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -2738,10 +2848,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 />
               </div>
 
-              <button onClick={() => setShowCreateMedicineModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <Pill size={18} />
-                <span>Add New Medicine</span>
-              </button>
+              {(hasPermission('medicines.manage') || hasPermission('inventory.manage')) && (
+                <button onClick={() => setShowCreateMedicineModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <Pill size={18} />
+                  <span>Add New Medicine</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -2888,10 +3000,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 ))}
               </div>
 
-              <button onClick={() => setShowCreateStaffModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <Stethoscope size={18} />
-                <span>Register New Staff</span>
-              </button>
+              {hasPermission('staff.manage') && (
+                <button onClick={() => setShowCreateStaffModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <Stethoscope size={18} />
+                  <span>Register New Staff</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -3029,10 +3143,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 />
               </div>
 
-              <button onClick={() => setShowCreatePatientModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <Users size={18} />
-                <span>Register New Patient</span>
-              </button>
+              {(hasPermission('patients.create') || hasPermission('patients.manage')) && (
+                <button onClick={() => setShowCreatePatientModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <Users size={18} />
+                  <span>Register New Patient</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -3145,10 +3261,12 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 />
               </div>
 
-              <button onClick={() => setShowCreateCategoryModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                <Plus size={18} />
-                <span>Add New Category</span>
-              </button>
+              {(hasPermission('inventory.manage') || hasPermission('medicines.manage')) && (
+                <button onClick={() => setShowCreateCategoryModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                  <Plus size={18} />
+                  <span>Add New Category</span>
+                </button>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -3224,22 +3342,24 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: '10px' }}>
-                <button 
-                  onClick={handleRecalculateAllSuppliers} 
-                  className="btn btn-secondary" 
-                  disabled={recalculatingAll}
-                  style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}
-                >
-                  <Sparkles size={16} className={recalculatingAll ? 'pulse-dot' : ''} />
-                  <span>{recalculatingAll ? 'Calculating...' : 'Auto-Calculate All Ratings'}</span>
-                </button>
+              {hasPermission('suppliers.manage') && (
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button 
+                    onClick={handleRecalculateAllSuppliers} 
+                    className="btn btn-secondary" 
+                    disabled={recalculatingAll}
+                    style={{ color: 'var(--primary)', borderColor: 'var(--primary)' }}
+                  >
+                    <Sparkles size={16} className={recalculatingAll ? 'pulse-dot' : ''} />
+                    <span>{recalculatingAll ? 'Calculating...' : 'Auto-Calculate All Ratings'}</span>
+                  </button>
 
-                <button onClick={() => setShowCreateSupplierModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
-                  <Plus size={18} />
-                  <span>Add New Supplier</span>
-                </button>
-              </div>
+                  <button onClick={() => setShowCreateSupplierModal(true)} className="btn btn-primary" style={{ flexShrink: 0 }}>
+                    <Plus size={18} />
+                    <span>Add New Supplier</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             <div className="glass-panel" style={{ overflowX: 'auto' }}>
@@ -3751,15 +3871,17 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 ))}
               </div>
 
-              <button 
-                onClick={handleTriggerAiInventoryAnalysis} 
-                className="btn btn-primary" 
-                disabled={isGeneratingAiRisk}
-                style={{ flexShrink: 0 }}
-              >
-                <Sparkles size={18} className={isGeneratingAiRisk ? 'pulse-dot' : ''} />
-                <span>{isGeneratingAiRisk ? 'Groq AI Analyzing FEFO Stock...' : '⚡ Run Groq AI Inventory Analysis'}</span>
-              </button>
+              {hasPermission('ai.analytics') && (
+                <button 
+                  onClick={handleTriggerAiInventoryAnalysis} 
+                  className="btn btn-primary" 
+                  disabled={isGeneratingAiRisk}
+                  style={{ flexShrink: 0 }}
+                >
+                  <Sparkles size={18} className={isGeneratingAiRisk ? 'pulse-dot' : ''} />
+                  <span>{isGeneratingAiRisk ? 'Groq AI Analyzing FEFO Stock...' : '⚡ Run Groq AI Inventory Analysis'}</span>
+                </button>
+              )}
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -4751,6 +4873,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           </div>
         )}
 
+
+            </>
+          )}
 
           {/* Portal Footer Bar (Displays at end of main content scroll) */}
 

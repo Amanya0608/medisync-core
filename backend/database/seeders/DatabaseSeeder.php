@@ -396,6 +396,25 @@ class DatabaseSeeder extends Seeder
             'created_at' => now()->subMinutes(25)
         ]);
 
+        // 12. Stock Condemnation Decommissioning Ledger
+        $cndCode = 'CND-2026-1088';
+        $cndHash = hash('sha256', "MEDISYNC-CONDEMNATION-{$cndCode}-{$batchHighRisk}-240-" . now()->toIso8601String());
+
+        DB::table('stock_condemnations')->insert([
+            'condemnation_code' => $cndCode,
+            'batch_id' => $batchHighRisk,
+            'quantity_condemned' => 240,
+            'reason' => 'EXPIRED',
+            'disposal_method' => 'Incineration',
+            'witnessed_by' => 'Chief Pharmacist & Compliance Auditor',
+            'certificate_hash' => $cndHash,
+            'condemned_by_user_id' => $adminUserId,
+            'status' => 'CONDEMNED_DESTROYED',
+            'notes' => 'Decommissioned expired batch AMX-2025-EXP14D. Formal destruction certificate issued.',
+            'created_at' => now()->subHours(1),
+            'updated_at' => now()->subHours(1)
+        ]);
+
         // 10. Audit Log
         DB::table('audit_logs')->insert([
             'user_id' => $adminUserId,
@@ -404,7 +423,7 @@ class DatabaseSeeder extends Seeder
             'entity_id' => 1,
             'ip_address' => '127.0.0.1',
             'user_agent' => 'MediSync Enterprise Seeder v1.0',
-            'payload' => json_encode(['tables_seeded' => 19, 'status' => 'SUCCESS']),
+            'payload' => json_encode(['tables_seeded' => 20, 'status' => 'SUCCESS']),
             'created_at' => now()
         ]);
     }

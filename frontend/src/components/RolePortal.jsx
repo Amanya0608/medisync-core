@@ -125,6 +125,19 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [safetyCheckResult, setSafetyCheckResult] = useState(null);
   const [isCheckingSafety, setIsCheckingSafety] = useState(false);
 
+  // Expired / Damaged Stock Condemnation Ledger State
+  const [condemnationsList, setCondemnationsList] = useState([]);
+  const [condemnationSummary, setCondemnationSummary] = useState({ total_batches: 0, total_units: 0 });
+  const [showCondemnModal, setShowCondemnModal] = useState(false);
+  const [condemnForm, setCondemnForm] = useState({
+    batch_id: '',
+    quantity_condemned: '',
+    reason: 'EXPIRED',
+    disposal_method: 'Incineration',
+    witnessed_by: 'Chief Pharmacist & Compliance Auditor',
+    notes: ''
+  });
+
   // Sidebar Categorization Collapsed State
   const [collapsedGroups, setCollapsedGroups] = useState({
     overview: false,
@@ -797,6 +810,55 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     }
   };
 
+  const fetchCondemnationsData = async () => {
+    try {
+      const res = await fetch('/api/v1/inventory/condemnations');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setCondemnationsList(data.condemnations || []);
+          setCondemnationSummary({
+            total_batches: data.total_decommissioned_batches || 0,
+            total_units: data.total_units_discarded || 0
+          });
+        }
+      }
+    } catch (err) {
+      console.error('Condemnations fetch error:', err);
+    }
+  };
+
+  const handleCondemnSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/v1/inventory/condemnations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...condemnForm, user_id: user.id })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setShowCondemnModal(false);
+        setCondemnForm({
+          batch_id: '',
+          quantity_condemned: '',
+          reason: 'EXPIRED',
+          disposal_method: 'Incineration',
+          witnessed_by: 'Chief Pharmacist & Compliance Auditor',
+          notes: ''
+        });
+        fetchCondemnationsData();
+        fetchAllData();
+        alert(`✓ Stock batch decommissioned successfully!\nDestruction Certificate SHA-256 Stamp:\n${data.certificate_hash}`);
+      } else {
+        alert(data.message || 'Error decommissioning stock batch.');
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Network error decommissioning stock batch.');
+    }
+  };
+
   const fetchNotificationsData = async () => {
     try {
       const res = await fetch('/api/v1/notifications');
@@ -816,6 +878,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     fetchAllData();
     fetchNotificationsData();
     fetchColdChainLogsData();
+    fetchCondemnationsData();
 
     // Setup Live SSE Stream Connection
     let eventSource;
@@ -4282,6 +4345,21 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <Thermometer size={16} />
                   <span>Cold-Chain Temp Sensors ({coldChainLogs.length})</span>
                 </button>
+                <button
+                  onClick={() => setBatchSubTab('condemnation')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: batchSubTab === 'condemnation' ? 'var(--primary)' : 'transparent',
+                    color: batchSubTab === 'condemnation' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Trash2 size={16} />
+                  <span>Condemnation Ledger ({condemnationsList.length})</span>
+                </button>
               </div>
 
               {batchSubTab === 'inventory' && (
@@ -4301,6 +4379,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 <button onClick={() => setShowLogTempModal(true)} className="btn btn-primary" style={{ background: 'var(--teal-accent)', color: '#000' }}>
                   <Thermometer size={16} />
                   <span>Log Temperature Reading</span>
+                </button>
+              )}
+
+              {batchSubTab === 'condemnation' && (
+                <button onClick={() => setShowCondemnModal(true)} className="btn btn-primary" style={{ background: 'var(--danger)' }}>
+                  <Trash2 size={16} />
+                  <span>Decommission & Condemn Stock</span>
                 </button>
               )}
             </div>
@@ -4603,6 +4688,74 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                           </tr>
                         );
                       })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {batchSubTab === 'condemnation' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+                  <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--danger)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL DECOMMISSIONED BATCHES</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--danger)', marginTop: '4px' }}>{condemnationSummary.total_batches} Decommissioned</div>
+                  </div>
+                  <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--warning)' }}>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL UNITS DISCARDED</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{condemnationSummary.total_units} Discarded Units</div>
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px 16px', minWidth: '120px' }}>CODE</th>
+                        <th style={{ padding: '14px 16px', minWidth: '160px' }}>MEDICINE & BATCH</th>
+                        <th style={{ padding: '14px 16px', minWidth: '110px' }}>QTY DISCARDED</th>
+                        <th style={{ padding: '14px 16px', minWidth: '130px' }}>REASON</th>
+                        <th style={{ padding: '14px 16px', minWidth: '140px' }}>DISPOSAL METHOD</th>
+                        <th style={{ padding: '14px 16px', minWidth: '220px' }}>DESTRUCTION CERTIFICATE (SHA-256)</th>
+                        <th style={{ padding: '14px 16px', minWidth: '120px' }}>STATUS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {condemnationsList.map(c => (
+                        <tr key={c.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: '700', color: 'var(--danger)', whiteSpace: 'nowrap' }}>
+                            {c.condemnation_code}
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <div style={{ fontWeight: '700' }}>{c.brand_name}</div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Batch #{c.batch_number} (Exp: {c.exp_date})</div>
+                          </td>
+                          <td style={{ padding: '14px 16px', fontWeight: '800', color: 'var(--danger)', fontSize: '1rem' }}>
+                            {c.quantity_condemned} {c.unit || 'units'}
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <span style={{ background: 'rgba(239, 68, 68, 0.15)', color: 'var(--danger)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                              {c.reason}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px 16px', color: 'var(--text-muted)' }}>
+                            {c.disposal_method}
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <div style={{ fontSize: '0.68rem', fontFamily: 'monospace', color: 'var(--primary)', wordBreak: 'break-all' }}>
+                              {c.certificate_hash}
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              Witnessed: {c.witnessed_by}
+                            </div>
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <span className="badge badge-success" style={{ background: 'rgba(16, 185, 129, 0.2)', color: 'var(--success)' }}>
+                              DESTROYED
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -7206,6 +7359,137 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
                 <button type="button" onClick={() => setShowLogTempModal(false)} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-primary" style={{ background: 'var(--teal-accent)', color: '#000' }}>Submit Reading</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* DECOMMISSION & CONDEMN STOCK BATCH MODAL */}
+      {showCondemnModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100 }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '540px', padding: '28px', position: 'relative' }}>
+            <button onClick={() => setShowCondemnModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
+              <X size={20} />
+            </button>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', padding: '10px', borderRadius: '10px', color: 'var(--danger)' }}>
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: '800' }}>Decommission & Condemn Stock Batch</h3>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Generate formal destruction certificate and ledger record</div>
+              </div>
+            </div>
+
+            <form onSubmit={handleCondemnSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  SELECT STOCK BATCH TO CONDEMN *
+                </label>
+                <select 
+                  className="input-field" 
+                  required 
+                  value={condemnForm.batch_id} 
+                  onChange={e => {
+                    const bId = parseInt(e.target.value);
+                    const found = batchesList.find(b => b.id === bId);
+                    setCondemnForm({
+                      ...condemnForm,
+                      batch_id: bId,
+                      quantity_condemned: found ? found.current_quantity : ''
+                    });
+                  }}
+                >
+                  <option value="">-- Select Stock Batch --</option>
+                  {batchesList.map(b => (
+                    <option key={b.id} value={b.id}>
+                      {b.brand_name} (Batch #{b.batch_number}) - Stock: {b.current_quantity} | Exp: {b.exp_date} ({b.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    QUANTITY TO DISCARD *
+                  </label>
+                  <input 
+                    type="number" 
+                    required 
+                    min={1} 
+                    className="input-field" 
+                    placeholder="Units to discard" 
+                    value={condemnForm.quantity_condemned} 
+                    onChange={e => setCondemnForm({ ...condemnForm, quantity_condemned: parseInt(e.target.value) })} 
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                    CONDEMNATION REASON *
+                  </label>
+                  <select 
+                    className="input-field" 
+                    value={condemnForm.reason} 
+                    onChange={e => setCondemnForm({ ...condemnForm, reason: e.target.value })}
+                  >
+                    <option value="EXPIRED">EXPIRED - Passed Shelf-Life Date</option>
+                    <option value="DAMAGED">DAMAGED - Physical Packaging Damage</option>
+                    <option value="STORAGE_BREACH">STORAGE BREACH - Cold-Chain Temp Failure</option>
+                    <option value="CONTAMINATED">CONTAMINATED - Chemical / Bio Spill</option>
+                    <option value="RECALLED">RECALLED - Manufacturer Recall Notice</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  DISPOSAL METHOD *
+                </label>
+                <select 
+                  className="input-field" 
+                  value={condemnForm.disposal_method} 
+                  onChange={e => setCondemnForm({ ...condemnForm, disposal_method: e.target.value })}
+                >
+                  <option value="High-Temp Incineration">High-Temp Bio-Incineration</option>
+                  <option value="Chemical Neutralization">Chemical Neutralization & Flushing</option>
+                  <option value="Encapsulation & Landfill">Encapsulation & Hazardous Landfill</option>
+                  <option value="Supplier Return">Supplier Quarantine Return</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  WITNESSED BY (COMPLIANCE OFFICER / AUDITOR) *
+                </label>
+                <input 
+                  type="text" 
+                  required 
+                  className="input-field" 
+                  value={condemnForm.witnessed_by} 
+                  onChange={e => setCondemnForm({ ...condemnForm, witnessed_by: e.target.value })} 
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.82rem', fontWeight: '700', color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>
+                  COMPLIANCE & AUDIT NOTES
+                </label>
+                <textarea 
+                  className="input-field" 
+                  rows={2} 
+                  placeholder="Additional audit notes, batch seal inspection, destruction approval..." 
+                  value={condemnForm.notes} 
+                  onChange={e => setCondemnForm({ ...condemnForm, notes: e.target.value })} 
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
+                <button type="button" onClick={() => setShowCondemnModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary" style={{ background: 'var(--danger)' }}>Issue Destruction Certificate</button>
               </div>
             </form>
           </div>

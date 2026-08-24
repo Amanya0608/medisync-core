@@ -2785,5 +2785,111 @@ Route::get('/v1/prescriptions/{code}/verify', function ($code) {
     ]);
 });
 
+/* -------------------------------------------------------------------------- */
+/* EXPIRED / DAMAGED STOCK CONDEMNATION LEDGER APIs                            */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/inventory/condemnations', function () {
+    $condemnations = DB::table('stock_condemnations')
+        ->join('medicine_batches', 'stock_condemnations.batch_id', '=', 'medicine_batches.id')
+        ->join('medicines', 'medicine_batches.medicine_id', '=', 'medicines.id')
+        ->leftJoin('users', 'stock_condemnations.condemned_by_user_id', '=', 'users.id')
+        ->select(
+            'stock_condemnations.*',
+            'medicine_batches.batch_number', 'medicine_batches.exp_date',
+            'medicines.brand_name', 'medicines.generic_name', 'medicines.unit',
+            'users.name as condemned_by_name'
+        )
+        ->orderBy('stock_condemnations.created_at', 'desc')
+        ->get();
+
+    $totalUnitsDiscarded = $condemnations->sum('quantity_condemned');
+
+    return response()->json([
+        'success' => true,
+        'condemnations' => $condemnations,
+        'total_decommissioned_batches' => $condemnations->count(),
+        'total_units_discarded' => $totalUnitsDiscarded
+    ]);
+});
+
+Route::post('/v1/inventory/condemnations', function (Request $request) {
+    $raw = json_decode($request->getContent(), true) ?? [];
+    $batchId = (int)($request->input('batch_id') ?? $raw['batch_id'] ?? 0);
+    $qty = (int)($request->input('quantity_condemned') ?? $raw['quantity_condemned'] ?? 0);
+    $reason = $request->input('reason') ?? $raw['reason'] ?? 'EXPIRED';
+    $disposalMethod = $request->input('disposal_method') ?? $raw['disposal_method'] ?? 'Incineration';
+    $witnessedBy = $request->input('witnessed_by') ?? $raw['witnessed_by'] ?? 'Chief Pharmacist & Compliance Auditor';
+    $notes = $request->input('notes') ?? $raw['notes'] ?? '';
+    $userId = (int)($request->input('user_id') ?? $raw['user_id'] ?? 1);
+
+    if (empty($batchId) && preg_match('/batch_id\s*:\s*(\d+)/i', $request->getContent(), $m)) {
+        $batchId = (int)$m[1];
+    }
+
+    $batch = DB::table('medicine_batches')->where('id', $batchId)->first();
+    if (!$batch) {
+        return response()->json(['success' => false, 'message' => 'Selected medicine batch not found.'], 404);
+    }
+
+    if ($qty <= 0) {
+        $qty = $batch->current_quantity > 0 ? $batch->current_quantity : 100;
+    }
+
+    $actualQtyToDeduct = min($qty, $batch->current_quantity);
+    $newStockQty = max(0, $batch->current_quantity - $actualQtyToDeduct);
+
+    DB::table('medicine_batches')->where('id', $batchId)->update([
+        'current_quantity' => $newStockQty,
+        'status' => $newStockQty === 0 ? 'expired' : $batch->status,
+        'updated_at' => now()
+    ]);
+
+    DB::table('inventory_transactions')->insert([
+        'batch_id' => $batchId,
+        'user_id' => $userId,
+        'transaction_type' => 'EXPIRED_DISCARD',
+        'quantity' => $actualQtyToDeduct,
+        'reference_number' => 'CONDEMN-' . strtoupper(substr(md5(uniqid()), 0, 8)),
+        'notes' => "Decommissioned & Condemned: {$actualQtyToDeduct} units due to {$reason}. Method: {$disposalMethod}",
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    $code = 'CND-2026-' . sprintf('%04d', rand(100, 9999));
+    $certHash = hash('sha256', "MEDISYNC-CONDEMNATION-{$code}-{$batchId}-{$actualQtyToDeduct}-" . now()->toIso8601String());
+
+    $condId = DB::table('stock_condemnations')->insertGetId([
+        'condemnation_code' => $code,
+        'batch_id' => $batchId,
+        'quantity_condemned' => $actualQtyToDeduct,
+        'reason' => $reason,
+        'disposal_method' => $disposalMethod,
+        'witnessed_by' => $witnessedBy,
+        'certificate_hash' => $certHash,
+        'condemned_by_user_id' => $userId,
+        'status' => 'CONDEMNED_DESTROYED',
+        'notes' => $notes,
+        'created_at' => now(),
+        'updated_at' => now()
+    ]);
+
+    DB::table('audit_logs')->insert([
+        'action' => 'STOCK_BATCH_CONDEMNED_DESTROYED',
+        'entity_type' => 'StockCondemnation',
+        'entity_id' => $condId,
+        'payload' => json_encode(['batch_id' => $batchId, 'qty' => $actualQtyToDeduct, 'reason' => $reason, 'cert_hash' => $certHash]),
+        'created_at' => now()
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Stock batch decommissioned and destruction certificate generated.',
+        'condemnation_code' => $code,
+        'certificate_hash' => $certHash,
+        'id' => $condId
+    ], 201);
+});
+
 
 

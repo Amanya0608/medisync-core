@@ -107,6 +107,10 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Cryptographic SHA-256 Signature Stamp**: Digitally signs prescription slips with doctor credentials and SLMC registration numbers to prevent drug forgery or unauthorized altering.
 * **Downloadable & Printable PDF Document**: One-click generation of official hospital e-Prescription slips formatted for physical printing or PDF downloads.
 
+### 🗑️ 14. Expired / Damaged Stock Condemnation Ledger (`/dashboard/batches`)
+* **Stock Batch Decommissioning Workflow**: Structured compliance process for logging and discarding expired, damaged, or temperature-breached pharmaceutical batches (`/v1/inventory/condemnations`).
+* **Cryptographic Destruction Certificates**: Generates SHA-256 digital destruction certificate hashes signed with witness auditor names, disposal methods (e.g., *High-Temp Incineration*), and audit trail timestamps.
+
 ---
 
 ## 📂 System Folder Structure

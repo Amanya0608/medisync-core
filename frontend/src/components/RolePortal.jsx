@@ -144,6 +144,11 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const [supplierSubTab, setSupplierSubTab] = useState('directory'); // 'directory' or 'po'
   const [isAutoGeneratingPO, setIsAutoGeneratingPO] = useState(false);
 
+  // ICD-10 / ICD-11 Clinical Diagnostic Codes State
+  const [icdCodesList, setIcdCodesList] = useState([]);
+  const [selectedIcdCode, setSelectedIcdCode] = useState(null);
+  const [icdSearchQuery, setIcdSearchQuery] = useState('');
+
   // Sidebar Categorization Collapsed State
   const [collapsedGroups, setCollapsedGroups] = useState({
     overview: false,
@@ -905,6 +910,20 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     }
   };
 
+  const fetchIcdCodes = async (query = '') => {
+    try {
+      const res = await fetch(`/api/v1/icd-codes?search=${encodeURIComponent(query)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIcdCodesList(data.icd_codes || []);
+        }
+      }
+    } catch (err) {
+      console.error('ICD codes fetch error:', err);
+    }
+  };
+
   const fetchNotificationsData = async () => {
     try {
       const res = await fetch('/api/v1/notifications');
@@ -926,6 +945,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     fetchColdChainLogsData();
     fetchCondemnationsData();
     fetchPurchaseOrdersData();
+    fetchIcdCodes('');
 
     // Setup Live SSE Stream Connection
     let eventSource;
@@ -2760,6 +2780,21 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   <ShieldCheck size={16} />
                   <span>Clinician Log Inspection ({triageLogsList.length})</span>
                 </button>
+                <button
+                  onClick={() => setTriageSubView('icd')}
+                  className="btn"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '0.85rem',
+                    background: triageSubView === 'icd' ? 'var(--primary)' : 'transparent',
+                    color: triageSubView === 'icd' ? '#fff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '8px'
+                  }}
+                >
+                  <Stethoscope size={16} />
+                  <span>ICD-10 / ICD-11 Diagnostic Codes</span>
+                </button>
               </div>
 
               {triageSubView === 'chat' && (
@@ -2973,6 +3008,78 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                           </tr>
                         );
                       })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {triageSubView === 'icd' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', flex: 1, minWidth: '260px' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                    <input 
+                      type="text" 
+                      className="input-field" 
+                      placeholder="Auto-complete search ICD-10 or ICD-11 codes by key (e.g. I10, E11.9) or condition name..." 
+                      value={icdSearchQuery}
+                      onChange={e => {
+                        setIcdSearchQuery(e.target.value);
+                        fetchIcdCodes(e.target.value);
+                      }}
+                      style={{ paddingLeft: '42px' }}
+                    />
+                  </div>
+                </div>
+
+                <div className="glass-panel" style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                        <th style={{ padding: '14px 16px', minWidth: '120px' }}>ICD CODE</th>
+                        <th style={{ padding: '14px 16px', minWidth: '110px' }}>VERSION</th>
+                        <th style={{ padding: '14px 16px', minWidth: '240px' }}>STANDARDIZED CLINICAL DESCRIPTION</th>
+                        <th style={{ padding: '14px 16px', minWidth: '180px' }}>MEDICAL CATEGORY</th>
+                        <th style={{ padding: '14px 16px', minWidth: '100px' }}>ACTION</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {icdCodesList.map(icd => (
+                        <tr key={icd.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '14px 16px', fontFamily: 'monospace', fontWeight: '800', color: 'var(--primary)', fontSize: '1rem' }}>
+                            {icd.code}
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <span style={{ 
+                              padding: '4px 10px', borderRadius: '6px', fontWeight: '800', fontSize: '0.75rem',
+                              background: icd.icd_version === 'ICD-11' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(99, 102, 241, 0.2)',
+                              color: icd.icd_version === 'ICD-11' ? 'var(--success)' : 'var(--primary)'
+                            }}>
+                              {icd.icd_version}
+                            </span>
+                          </td>
+                          <td style={{ padding: '14px 16px', fontWeight: '700', color: 'var(--text-main)' }}>
+                            {icd.description}
+                          </td>
+                          <td style={{ padding: '14px 16px', color: 'var(--teal-accent)', fontSize: '0.82rem' }}>
+                            {icd.category}
+                          </td>
+                          <td style={{ padding: '14px 16px' }}>
+                            <button 
+                              onClick={() => {
+                                setSelectedIcdCode(icd);
+                                alert(`✓ Selected ${icd.icd_version} Code: ${icd.code} - ${icd.description}`);
+                              }} 
+                              className="btn btn-secondary" 
+                              style={{ padding: '4px 10px', fontSize: '0.78rem', color: 'var(--primary)' }}
+                            >
+                              <Stethoscope size={14} />
+                              <span>Select Code</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

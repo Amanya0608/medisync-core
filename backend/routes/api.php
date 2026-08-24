@@ -2991,5 +2991,36 @@ Route::post('/v1/purchase-orders/auto-generate', function (Request $request) {
     ], 201);
 });
 
+/* -------------------------------------------------------------------------- */
+/* ICD-10 / ICD-11 CLINICAL DIAGNOSTIC CODES API                               */
+/* -------------------------------------------------------------------------- */
+
+Route::get('/v1/icd-codes', function (Request $request) {
+    $search = strtolower($request->query('search', ''));
+    $version = $request->query('version', '');
+
+    $query = DB::table('icd_codes');
+
+    if (!empty($version)) {
+        $query->where('icd_version', $version);
+    }
+
+    if (!empty($search)) {
+        $query->where(function($q) use ($search) {
+            $q->where(DB::raw('LOWER(code)'), 'like', "%{$search}%")
+              ->orWhere(DB::raw('LOWER(description)'), 'like', "%{$search}%")
+              ->orWhere(DB::raw('LOWER(category)'), 'like', "%{$search}%");
+        });
+    }
+
+    $codes = $query->limit(50)->get();
+
+    return response()->json([
+        'success' => true,
+        'icd_codes' => $codes,
+        'total_count' => $codes->count()
+    ]);
+});
+
 
 

@@ -115,6 +115,10 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Threshold-Triggered PO Auto-Generation**: Scans total medicine stock across all active FEFO batches and auto-generates Purchase Order drafts (`PO-2026-XXXX`) when stock drops below minimum reorder thresholds (`/v1/purchase-orders/auto-generate`).
 * **Instant Supplier Email Dispatch**: Dispatches formatted purchase orders directly to preferred supplier emails (e.g. `procurement@pharmanet.lk`) with estimated procurement costs, requested quantities, and system audit trail logs.
 
+### 🩺 16. ICD-10 / ICD-11 Clinical Diagnostic Code Integration (`/dashboard/ai-triage`)
+* **Standardized Medical Coding**: Integrated WHO ICD-10 and ICD-11 international diagnostic coding database (`/v1/icd-codes`).
+* **Real-Time Auto-Complete Search**: Auto-complete search functionality by code key (e.g., `I10`, `E11.9`, `BA00`) or condition description for fast clinical diagnostic classification during patient consultations and AI triage evaluations.
+
 ---
 
 ## 📂 System Folder Structure

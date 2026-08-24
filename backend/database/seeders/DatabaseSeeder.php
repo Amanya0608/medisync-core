@@ -430,6 +430,22 @@ class DatabaseSeeder extends Seeder
             'updated_at' => now()->subHours(2)
         ]);
 
+        // 14. Standardized ICD-10 & ICD-11 Clinical Diagnostic Codes
+        DB::table('icd_codes')->insert([
+            ['icd_version' => 'ICD-10', 'code' => 'I10', 'description' => 'Essential (primary) hypertension', 'category' => 'Circulatory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'E11.9', 'description' => 'Type 2 diabetes mellitus without complications', 'category' => 'Endocrine & Metabolic', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'J45.909', 'description' => 'Unspecified asthma, uncomplicated', 'category' => 'Respiratory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'I21.9', 'description' => 'Acute myocardial infarction, unspecified', 'category' => 'Circulatory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'J18.9', 'description' => 'Pneumonia, unspecified organism', 'category' => 'Respiratory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'K21.9', 'description' => 'Gastro-esophageal reflux disease without esophagitis', 'category' => 'Digestive System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'N39.0', 'description' => 'Urinary tract infection, site not specified', 'category' => 'Genitourinary System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-10', 'code' => 'M54.5', 'description' => 'Low back pain, unspecific', 'category' => 'Musculoskeletal System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => 'BA00', 'description' => 'Essential hypertension (Primary hypertension)', 'category' => 'Diseases of Circulatory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => '5A11', 'description' => 'Type 2 diabetes mellitus', 'category' => 'Endocrine, Nutritional & Metabolic', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => 'CA23', 'description' => 'Asthma (Unspecified clinical phenotypes)', 'category' => 'Diseases of Respiratory System', 'created_at' => now(), 'updated_at' => now()],
+            ['icd_version' => 'ICD-11', 'code' => 'BA41', 'description' => 'Acute myocardial infarction', 'category' => 'Diseases of Circulatory System', 'created_at' => now(), 'updated_at' => now()]
+        ]);
+
         // 10. Audit Log
         DB::table('audit_logs')->insert([
             'user_id' => $adminUserId,
@@ -438,7 +454,7 @@ class DatabaseSeeder extends Seeder
             'entity_id' => 1,
             'ip_address' => '127.0.0.1',
             'user_agent' => 'MediSync Enterprise Seeder v1.0',
-            'payload' => json_encode(['tables_seeded' => 21, 'status' => 'SUCCESS']),
+            'payload' => json_encode(['tables_seeded' => 22, 'status' => 'SUCCESS']),
             'created_at' => now()
         ]);
     }

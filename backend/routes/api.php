@@ -2640,5 +2640,107 @@ Route::post('/v1/cold-chain/logs', function (Request $request) {
     ], 201);
 });
 
+/* -------------------------------------------------------------------------- */
+/* REAL-TIME DRUG-DRUG INTERACTION & ALLERGY SAFETY CHECK APIs               */
+/* -------------------------------------------------------------------------- */
+
+Route::post('/v1/prescriptions/safety-check', function (Request $request) {
+    $content = $request->getContent();
+    $raw = json_decode($content, true) ?? [];
+    $patientId = (int)($request->input('patient_id') ?? $raw['patient_id'] ?? 0);
+    $medicineIds = $request->input('medicine_ids') ?? $raw['medicine_ids'] ?? [];
+
+    if (empty($medicineIds) && preg_match('/medicine_ids\s*:\s*\[([0-9,\s]+)\]/i', $content, $m)) {
+        $medicineIds = array_map('intval', explode(',', $m[1]));
+    }
+    if (empty($patientId) && preg_match('/patient_id\s*:\s*(\d+)/i', $content, $m)) {
+        $patientId = (int)$m[1];
+    }
+
+    $patient = DB::table('patients')->where('id', $patientId)->first();
+    $patientAllergies = strtolower($patient ? ($patient->allergies ?? '') : '');
+
+    $medicines = DB::table('medicines')
+        ->whereIn('id', (array)$medicineIds)
+        ->get();
+
+    $allergyWarnings = [];
+    $interactionWarnings = [];
+
+    // 1. Patient Allergy Check
+    if ($patientAllergies && $patientAllergies !== 'none' && $patientAllergies !== 'none reported') {
+        foreach ($medicines as $med) {
+            $brandLower = strtolower($med->brand_name);
+            $genericLower = strtolower($med->generic_name);
+
+            if (
+                str_contains($patientAllergies, $genericLower) || 
+                str_contains($patientAllergies, $brandLower) ||
+                (str_contains($patientAllergies, 'penicillin') && (str_contains($genericLower, 'amox') || str_contains($genericLower, 'penicil'))) ||
+                (str_contains($patientAllergies, 'sulfa') && str_contains($genericLower, 'sulfa')) ||
+                (str_contains($patientAllergies, 'aspirin') && (str_contains($genericLower, 'aspirin') || str_contains($genericLower, 'nsaid')))
+            ) {
+                $allergyWarnings[] = [
+                    'severity' => 'CRITICAL_CONTRAINDICATION',
+                    'medicine' => "{$med->brand_name} ({$med->generic_name})",
+                    'conflict' => "Patient EHR records allergy to '{$patient->allergies}'. High risk of anaphylaxis / severe reaction!"
+                ];
+            }
+        }
+    }
+
+    // 2. Drug-Drug Interaction (DDI) Engine
+    $knownInteractions = [
+        ['groupA' => ['amox', 'amoxicillin'], 'groupB' => ['allopurinol'], 'severity' => 'MODERATE', 'note' => 'Increased incidence of skin rash when Amoxicillin is co-administered with Allopurinol.'],
+        ['groupA' => ['atorva', 'atorvastatin', 'lipitor'], 'groupB' => ['clarithro', 'clarithromycin', 'ketoconazole', 'erythro'], 'severity' => 'MAJOR', 'note' => 'Coadministration significantly increases statin blood concentrations, elevating risk of rhabdomyolysis and severe myopathy.'],
+        ['groupA' => ['aspirin'], 'groupB' => ['warfarin', 'heparin', 'ibuprofen'], 'severity' => 'MAJOR', 'note' => 'Potentiation of anticoagulant action and additive gastrointestinal mucosal erosion. High risk of major bleeding.'],
+        ['groupA' => ['metformin'], 'groupB' => ['contrast', 'cimetidine'], 'severity' => 'MODERATE', 'note' => 'Increased risk of metformin accumulation and renal impairment/lactic acidosis. Monitor eGFR.'],
+    ];
+
+    $medCount = count($medicines);
+    for ($i = 0; $i < $medCount; $i++) {
+        for ($j = $i + 1; $j < $medCount; $j++) {
+            $medA = $medicines[$i];
+            $medB = $medicines[$j];
+
+            $genA = strtolower($medA->generic_name . ' ' . $medA->brand_name);
+            $genB = strtolower($medB->generic_name . ' ' . $medB->brand_name);
+
+            foreach ($knownInteractions as $ddi) {
+                $matchA1 = false; foreach ($ddi['groupA'] as $kw) { if (str_contains($genA, $kw)) $matchA1 = true; }
+                $matchB1 = false; foreach ($ddi['groupB'] as $kw) { if (str_contains($genB, $kw)) $matchB1 = true; }
+
+                $matchA2 = false; foreach ($ddi['groupA'] as $kw) { if (str_contains($genB, $kw)) $matchA2 = true; }
+                $matchB2 = false; foreach ($ddi['groupB'] as $kw) { if (str_contains($genA, $kw)) $matchB2 = true; }
+
+                if (($matchA1 && $matchB1) || ($matchA2 && $matchB2)) {
+                    $interactionWarnings[] = [
+                        'severity' => $ddi['severity'],
+                        'pair' => "{$medA->brand_name} + {$medB->brand_name}",
+                        'note' => $ddi['note']
+                    ];
+                }
+            }
+        }
+    }
+
+    $hasWarning = count($allergyWarnings) > 0 || count($interactionWarnings) > 0;
+    $overallRating = 'SAFE';
+    if (count($allergyWarnings) > 0 || collect($interactionWarnings)->contains('severity', 'MAJOR')) {
+        $overallRating = 'CRITICAL_CONTRAINDICATION';
+    } else if (count($interactionWarnings) > 0) {
+        $overallRating = 'CAUTION';
+    }
+
+    return response()->json([
+        'success' => true,
+        'has_warning' => $hasWarning,
+        'overall_rating' => $overallRating,
+        'allergy_warnings' => $allergyWarnings,
+        'interaction_warnings' => $interactionWarnings,
+        'evaluated_medicines_count' => $medCount
+    ]);
+});
+
 
 

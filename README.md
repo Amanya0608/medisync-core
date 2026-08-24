@@ -98,6 +98,10 @@ The system features a **Role-Based Access Control (RBAC)** security architecture
 * **Biologics Temperature Tracking**: Digital temperature monitoring for cold-chain sensitive pharmaceuticals (vaccines, insulin, biologics) stored between 2.0°C and 8.0°C.
 * **Automated Breach Alerts**: Detects upper/lower temperature limit breaches (`BREACH_HIGH`, `BREACH_LOW`) and triggers security audit alerts (`COLD_CHAIN_TEMPERATURE_BREACH_ALERT`).
 
+### 🛡️ 12. Real-Time Drug-Drug Interaction & Allergy Safety Checks (`/dashboard/prescriptions`)
+* **Patient EHR Allergy Cross-Checking**: Automatically evaluates prescribed medications against patient allergy records (e.g. Penicillin, Sulfa drugs) and flags critical anaphylaxis warnings (`CRITICAL_CONTRAINDICATION`).
+* **Drug-Drug Interaction (DDI) Engine**: Analyzes prescribed multi-drug combinations for dangerous clinical interactions (e.g. Atorvastatin + Clarithromycin, Aspirin + Warfarin) with severity grading (`MAJOR`, `MODERATE`) and clinical mitigation guidance.
+
 ---
 
 ## 📂 System Folder Structure

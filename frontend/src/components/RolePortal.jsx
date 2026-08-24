@@ -121,6 +121,10 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     notes: ''
   });
 
+  // Real-Time Drug-Drug Interaction & Allergy Safety Check State
+  const [safetyCheckResult, setSafetyCheckResult] = useState(null);
+  const [isCheckingSafety, setIsCheckingSafety] = useState(false);
+
   // Sidebar Categorization Collapsed State
   const [collapsedGroups, setCollapsedGroups] = useState({
     overview: false,
@@ -766,6 +770,30 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     } catch (err) {
       console.error(err);
       alert('Network error logging cold-chain reading.');
+    }
+  };
+
+  const handleRunSafetyCheck = async (patientId, medicineItems) => {
+    if (!patientId || !medicineItems || medicineItems.length === 0) return;
+    const medIds = medicineItems.map(i => i.medicine_id).filter(Boolean);
+    if (medIds.length === 0) return;
+
+    setIsCheckingSafety(true);
+    setSafetyCheckResult(null);
+    try {
+      const res = await fetch('/api/v1/prescriptions/safety-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_id: patientId, medicine_ids: medIds })
+      });
+      const data = await res.json();
+      setIsCheckingSafety(false);
+      if (res.ok && data.success) {
+        setSafetyCheckResult(data);
+      }
+    } catch (err) {
+      console.error('Safety check error:', err);
+      setIsCheckingSafety(false);
     }
   };
 
@@ -5297,8 +5325,47 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                 </div>
               </div>
 
+              {/* REAL-TIME DRUG INTERACTION & ALLERGY SAFETY CHECK BANNER */}
+              <div style={{ marginTop: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => handleRunSafetyCheck(prescriptionForm.patient_id, prescriptionForm.items)} 
+                    className="btn btn-secondary" 
+                    disabled={isCheckingSafety}
+                    style={{ padding: '6px 14px', fontSize: '0.82rem', color: 'var(--teal-accent)', borderColor: 'var(--teal-accent)' }}
+                  >
+                    <ShieldCheck size={16} />
+                    <span>{isCheckingSafety ? 'Running Safety Check...' : 'Run Drug-Drug & EHR Allergy Safety Check'}</span>
+                  </button>
+                </div>
+
+                {safetyCheckResult && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {safetyCheckResult.allergy_warnings?.map((a, i) => (
+                      <div key={i} style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.4)', color: 'var(--danger)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem' }}>
+                        <strong>🚨 CRITICAL ALLERGY CONFLICT ({a.medicine}):</strong> {a.conflict}
+                      </div>
+                    ))}
+
+                    {safetyCheckResult.interaction_warnings?.map((ddi, i) => (
+                      <div key={i} style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.4)', color: 'var(--warning)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem' }}>
+                        <strong>⚠️ DRUG-DRUG INTERACTION ({ddi.pair}):</strong> {ddi.note}
+                      </div>
+                    ))}
+
+                    {!safetyCheckResult.has_warning && (
+                      <div style={{ background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.4)', color: 'var(--success)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CheckCircle2 size={16} />
+                        <span>Clinical Safety Verification Passed: No drug interactions or patient allergy conflicts detected.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '14px' }}>
-                <button type="button" onClick={() => setShowCreatePrescriptionModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="button" onClick={() => { setShowCreatePrescriptionModal(false); setSafetyCheckResult(null); }} className="btn btn-secondary">Cancel</button>
                 <button type="submit" className="btn btn-primary">Issue Rx Prescription</button>
               </div>
             </form>

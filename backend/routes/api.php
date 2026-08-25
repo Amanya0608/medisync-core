@@ -1901,8 +1901,9 @@ Route::delete('/v1/appointments/{id}', function ($id) {
 });
 
 // Clinical Prescriptions & Prescription Items CRUD Engine
-Route::get('/v1/prescriptions', function () {
-    $prescriptions = DB::table('prescriptions')
+Route::get('/v1/prescriptions', function (\Illuminate\Http\Request $request) {
+    $doctorId = $request->query('doctor_id');
+    $query = DB::table('prescriptions')
         ->join('patients', 'prescriptions.patient_id', '=', 'patients.id')
         ->join('staff', 'prescriptions.doctor_id', '=', 'staff.id')
         ->leftJoin('appointments', 'prescriptions.appointment_id', '=', 'appointments.id')
@@ -1924,9 +1925,13 @@ Route::get('/v1/prescriptions', function () {
             'appointments.type as appointment_type',
             DB::raw("CONCAT(patients.first_name, ' ', patients.last_name) as patient_name"),
             DB::raw("CONCAT(staff.first_name, ' ', staff.last_name) as doctor_name")
-        )
-        ->orderBy('prescriptions.id', 'desc')
-        ->get();
+        );
+
+    if ($doctorId) {
+        $query->where('prescriptions.doctor_id', $doctorId);
+    }
+
+    $prescriptions = $query->orderBy('prescriptions.id', 'desc')->get();
 
     foreach ($prescriptions as $rx) {
         $items = DB::table('prescription_items')

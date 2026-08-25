@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   Activity, Users, Calendar, ShieldCheck, Sun, Moon, 
@@ -1840,7 +1840,40 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     setRecalculatingAll(false);
   };
 
-  const filteredPrescriptions = prescriptionsList.filter(rx => {
+  const isDoctorRole = user && (user.roleKey === 'doctor' || (user.role && user.role.toLowerCase().includes('doctor')));
+
+  const currentDoctorStaffRecord = useMemo(() => {
+    if (!user) return null;
+    return staffList.find(s => s.user_id === user.id || (user.email && s.email === user.email)) || null;
+  }, [staffList, user]);
+
+  const isAssignedToCurrentDoctor = (item) => {
+    if (!isDoctorRole) return true; // Super Admin, Pharmacist, Staff Nurse view full hospital records
+
+    const currentDocId = user.doctor_id || user.staff_id || (currentDoctorStaffRecord ? currentDoctorStaffRecord.id : null);
+
+    // Match by ID
+    if (currentDocId && item.doctor_id == currentDocId) return true;
+    if (user.id && (item.user_id == user.id || item.doctor_id == user.id)) return true;
+
+    // Doctor Name matching fallback
+    const docNameClean = (user.name || '').replace(/^dr\.\s*/i, '').trim().toLowerCase();
+    if (docNameClean && item.doctor_name) {
+      const itemDocName = item.doctor_name.replace(/^dr\.\s*/i, '').trim().toLowerCase();
+      if (itemDocName.includes(docNameClean) || docNameClean.includes(itemDocName)) return true;
+    }
+
+    if (docNameClean && item.doctor_first_name && docNameClean.includes(item.doctor_first_name.toLowerCase())) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const rolePrescriptionsList = isDoctorRole ? prescriptionsList.filter(isAssignedToCurrentDoctor) : prescriptionsList;
+  const roleAppointmentsList = isDoctorRole ? appointments.filter(isAssignedToCurrentDoctor) : appointments;
+
+  const filteredPrescriptions = rolePrescriptionsList.filter(rx => {
     const matchesSearch = 
       (rx.prescription_code && rx.prescription_code.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
       (rx.patient_name && rx.patient_name.toLowerCase().includes(prescriptionSearch.toLowerCase())) ||
@@ -1853,7 +1886,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
     return matchesSearch && rx.status === prescriptionStatusFilter;
   });
 
-  const filteredAppointments = appointments.filter(a => {
+  const filteredAppointments = roleAppointmentsList.filter(a => {
     const matchesSearch = 
       (a.patient_name && a.patient_name.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
       (a.patient_code && a.patient_code.toLowerCase().includes(appointmentSearch.toLowerCase())) ||
@@ -1992,15 +2025,15 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
   // Prescription Counters
 
-  const issuedRxCount = prescriptionsList.filter(r => r.status === 'ISSUED').length;
-  const dispensedRxCount = prescriptionsList.filter(r => r.status === 'DISPENSED').length;
-  const draftRxCount = prescriptionsList.filter(r => r.status === 'DRAFT').length;
+  const issuedRxCount = rolePrescriptionsList.filter(r => r.status === 'ISSUED').length;
+  const dispensedRxCount = rolePrescriptionsList.filter(r => r.status === 'DISPENSED').length;
+  const draftRxCount = rolePrescriptionsList.filter(r => r.status === 'DRAFT').length;
 
   // Appointment Counters
-  const scheduledCount = appointments.filter(a => a.status === 'Scheduled').length;
-  const inProgressCount = appointments.filter(a => a.status === 'In_Progress').length;
-  const emergencyPriorityCount = appointments.filter(a => a.priority === 'Emergency' || a.priority === 'High').length;
-  const completedCount = appointments.filter(a => a.status === 'Completed').length;
+  const scheduledCount = roleAppointmentsList.filter(a => a.status === 'Scheduled').length;
+  const inProgressCount = roleAppointmentsList.filter(a => a.status === 'In_Progress').length;
+  const emergencyPriorityCount = roleAppointmentsList.filter(a => a.priority === 'Emergency' || a.priority === 'High').length;
+  const completedCount = roleAppointmentsList.filter(a => a.status === 'Completed').length;
 
   // Triage Counters
   const emergencyTriageCount = triageLogsList.filter(t => t.suggested_triage_level === 'Emergency').length;
@@ -2054,21 +2087,21 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
       {/* Top Bar Header Layout Optimization */}
       <header className="portal-topbar">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexShrink: 0 }}>
           <div style={{ background: 'linear-gradient(135deg, var(--accent), var(--teal-accent))', padding: '8px 10px', borderRadius: '10px', color: '#fff', display: 'flex' }}>
             <BrainCircuit size={20} />
           </div>
           <div>
-            <div style={{ fontWeight: '800', fontSize: '1rem', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ fontWeight: '800', fontSize: '1rem', letterSpacing: '-0.3px', display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
               <span>MediSync Platform</span>
-              <span style={{ fontSize: '0.68rem', background: 'var(--primary-glow)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '10px', textTransform: 'uppercase', fontWeight: '700' }}>
+              <span style={{ fontSize: '0.68rem', background: 'var(--primary-glow)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '10px', textTransform: 'uppercase', fontWeight: '700', whiteSpace: 'nowrap' }}>
                 {user.role}
               </span>
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
           {/* Light / Dark Mode Toggle Button */}
           <button 
             onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
@@ -2225,9 +2258,9 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                   (user.name && user.name[0]) || 'U'
                 )}
               </div>
-              <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.1 }}>{profileForm.name || user.name}</span>
-                <span style={{ fontSize: '0.68rem', color: 'var(--primary)', fontWeight: '600' }}>{user.role}</span>
+              <div style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', maxWidth: '140px', overflow: 'hidden' }}>
+                <span style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profileForm.name || user.name}</span>
+                <span style={{ fontSize: '0.68rem', color: 'var(--primary)', fontWeight: '600', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.role}</span>
               </div>
               <ChevronDown size={14} color="var(--text-muted)" />
             </button>
@@ -2438,7 +2471,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="glass-panel" style={{ padding: '16px' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL RX PRESCRIPTIONS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{prescriptionsList.length} Prescriptions</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{rolePrescriptionsList.length} Prescriptions</div>
               </div>
               <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ISSUED / ACTIVE</div>
@@ -2616,7 +2649,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
               <div className="glass-panel" style={{ padding: '16px' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>TOTAL APPOINTMENTS</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{appointments.length} Booked</div>
+                <div style={{ fontSize: '1.6rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{roleAppointmentsList.length} Booked</div>
               </div>
               <div className="glass-panel" style={{ padding: '16px', borderLeft: '4px solid var(--teal-accent)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>SCHEDULED / IN PROGRESS</div>
@@ -4001,7 +4034,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
               <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid var(--primary)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>CONSULTATIONS & APPOINTMENTS</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{appointments.length} Scheduled</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--primary)', marginTop: '4px' }}>{roleAppointmentsList.length} Scheduled</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
                   <span style={{ color: 'var(--success)', fontWeight: '700' }}>✓ {completedCount} Done</span>
                   <span style={{ color: 'var(--primary)', fontWeight: '700' }}>⌛ {scheduledCount} Pending</span>
@@ -4010,7 +4043,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
               <div className="glass-panel" style={{ padding: '20px', borderLeft: '4px solid var(--warning)' }}>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '700' }}>ELECTRONIC PRESCRIPTIONS (Rx)</div>
-                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{prescriptionsList.length} Rx Issued</div>
+                <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--warning)', marginTop: '4px' }}>{rolePrescriptionsList.length} Rx Issued</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', display: 'flex', gap: '8px' }}>
                   <span style={{ color: 'var(--success)', fontWeight: '700' }}>{dispensedRxCount} Dispensed</span>
                   <span style={{ color: 'var(--primary)', fontWeight: '700' }}>{issuedRxCount} Active</span>
@@ -5720,7 +5753,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
           <footer className="portal-footer">
             <div>© 2026 MediSync Healthcare Platform • Clinical & Inventory Engine v2.4.0</div>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
               <span>Database: <strong style={{ color: 'var(--success)' }}>Connected</strong></span>
               <span>AI Engine: <strong style={{ color: 'var(--teal-accent)' }}>Connected</strong></span>
               <span>SLMC & HIPAA Compliant</span>

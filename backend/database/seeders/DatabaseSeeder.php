@@ -225,7 +225,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 70 555 1212',
                 'blood_group' => 'O+',
                 'allergies' => 'Penicillin, Sulfa drugs',
-                'medical_history' => 'Hypertension (3 yrs), Mild asthma'
+                'medical_history' => 'Hypertension (3 yrs), Mild asthma',
+                'emergency_contact_name' => 'Robert Vance (Spouse)',
+                'emergency_contact_phone' => '+94 77 111 2233'
             ],
             [
                 'patient_code' => 'PAT-2026-002',
@@ -237,7 +239,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 76 888 3434',
                 'blood_group' => 'A+',
                 'allergies' => 'None reported',
-                'medical_history' => 'Post-op Knee Surgery'
+                'medical_history' => 'Post-op Knee Surgery',
+                'emergency_contact_name' => 'Sarah Holloway (Sister)',
+                'emergency_contact_phone' => '+94 71 999 4455'
             ],
             [
                 'patient_code' => 'PAT-2026-003',
@@ -249,7 +253,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 77 345 6789',
                 'blood_group' => 'B+',
                 'allergies' => 'Aspirin, NSAIDs',
-                'medical_history' => 'Type 2 Diabetes Mellitus, CAD'
+                'medical_history' => 'Type 2 Diabetes Mellitus, CAD',
+                'emergency_contact_name' => 'Sunethra De Silva (Wife)',
+                'emergency_contact_phone' => '+94 77 444 5566'
             ],
             [
                 'patient_code' => 'PAT-2026-004',
@@ -261,7 +267,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 71 234 8901',
                 'blood_group' => 'AB+',
                 'allergies' => 'Latex, Amoxicillin',
-                'medical_history' => 'Allergic Rhinitis, Chronic Migraine'
+                'medical_history' => 'Allergic Rhinitis, Chronic Migraine',
+                'emergency_contact_name' => 'Nimali Wickramasinghe (Mother)',
+                'emergency_contact_phone' => '+94 70 888 7766'
             ],
             [
                 'patient_code' => 'PAT-2026-005',
@@ -273,7 +281,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 75 999 1122',
                 'blood_group' => 'O-',
                 'allergies' => 'Ciprofloxacin',
-                'medical_history' => 'Chronic Kidney Disease Stage 2, Gout'
+                'medical_history' => 'Chronic Kidney Disease Stage 2, Gout',
+                'emergency_contact_name' => 'Chamari Jayawardena (Wife)',
+                'emergency_contact_phone' => '+94 76 222 3344'
             ],
             [
                 'patient_code' => 'PAT-2026-006',
@@ -285,7 +295,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 78 444 5566',
                 'blood_group' => 'A-',
                 'allergies' => 'Shellfish, Iodine Contrast',
-                'medical_history' => 'Hypothyroidism, Iron Deficiency Anemia'
+                'medical_history' => 'Hypothyroidism, Iron Deficiency Anemia',
+                'emergency_contact_name' => 'Kusal Perera (Brother)',
+                'emergency_contact_phone' => '+94 72 333 4455'
             ],
             [
                 'patient_code' => 'PAT-2026-007',
@@ -297,7 +309,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 72 666 7788',
                 'blood_group' => 'B-',
                 'allergies' => 'Metronidazole',
-                'medical_history' => 'GERD (Acid Reflux), Peptic Ulcer Disease'
+                'medical_history' => 'GERD (Acid Reflux), Peptic Ulcer Disease',
+                'emergency_contact_name' => 'Fatima Ahamed (Wife)',
+                'emergency_contact_phone' => '+94 75 777 8899'
             ],
             [
                 'patient_code' => 'PAT-2026-008',
@@ -309,7 +323,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 77 888 9900',
                 'blood_group' => 'AB-',
                 'allergies' => 'Codeine, Tramadol',
-                'medical_history' => 'Osteoarthritis, Osteoporosis'
+                'medical_history' => 'Osteoarthritis, Osteoporosis',
+                'emergency_contact_name' => 'Anura Ratnayake (Son)',
+                'emergency_contact_phone' => '+94 77 666 5544'
             ],
             [
                 'patient_code' => 'PAT-2026-009',
@@ -321,7 +337,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 76 123 7890',
                 'blood_group' => 'O+',
                 'allergies' => 'Cephalexin',
-                'medical_history' => 'Bronchial Asthma, Atopic Dermatitis'
+                'medical_history' => 'Bronchial Asthma, Atopic Dermatitis',
+                'emergency_contact_name' => 'Kasun Mendis (Brother)',
+                'emergency_contact_phone' => '+94 71 555 6677'
             ],
             [
                 'patient_code' => 'PAT-2026-010',
@@ -333,7 +351,9 @@ class DatabaseSeeder extends Seeder
                 'phone' => '+94 70 333 4455',
                 'blood_group' => 'A+',
                 'allergies' => 'Peanuts, Erythromycin',
-                'medical_history' => 'PCOS, Dysmenorrhea'
+                'medical_history' => 'PCOS, Dysmenorrhea',
+                'emergency_contact_name' => 'Kamal Cooray (Father)',
+                'emergency_contact_phone' => '+94 70 222 3344'
             ]
         ];
 

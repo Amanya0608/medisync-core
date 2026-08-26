@@ -2538,10 +2538,27 @@ Route::post('/v1/patient-portal/lookup', function (Request $request) {
 Route::post('/v1/patient-portal/request-appointment', function (Request $request) {
     $raw = json_decode($request->getContent(), true) ?? [];
     $patientId = (int)($request->input('patient_id') ?? $raw['patient_id'] ?? 0);
-    $doctorId = (int)($request->input('doctor_id') ?? $raw['doctor_id'] ?? 1);
-    $date = $request->input('appointment_date') ?? $raw['appointment_date'] ?? date('Y-m-d H:i:s', strtotime('+1 day'));
-    $type = $request->input('consultation_type') ?? $raw['consultation_type'] ?? 'General Checkup';
+    $doctorId = (int)($request->input('doctor_id') ?? $raw['doctor_id'] ?? 0);
+
+    if ($doctorId <= 0) {
+        $firstDoc = DB::table('staff')->first();
+        $doctorId = $firstDoc ? $firstDoc->id : 1;
+    }
+
+    $dateInput = $request->input('appointment_date') ?? $raw['appointment_date'] ?? date('Y-m-d H:i:s', strtotime('+1 day'));
+    $dateFormatted = date('Y-m-d H:i:s', strtotime($dateInput));
+
+    $rawType = $request->input('consultation_type') ?? $raw['consultation_type'] ?? 'Consultation';
     $reason = $request->input('clinical_reason') ?? $raw['clinical_reason'] ?? 'Follow-up patient consultation request';
+
+    $validType = 'Consultation';
+    if (stripos($rawType, 'follow') !== false) {
+        $validType = 'Follow-up';
+    } elseif (stripos($rawType, 'emergency') !== false) {
+        $validType = 'Emergency';
+    } elseif (stripos($rawType, 'routine') !== false || stripos($rawType, 'checkup') !== false) {
+        $validType = 'Routine Checkup';
+    }
 
     $patientExists = DB::table('patients')->where('id', $patientId)->exists();
     if (!$patientExists) {
@@ -2551,11 +2568,11 @@ Route::post('/v1/patient-portal/request-appointment', function (Request $request
     $aptId = DB::table('appointments')->insertGetId([
         'patient_id' => $patientId,
         'doctor_id' => $doctorId,
-        'appointment_date' => $date,
-        'consultation_type' => $type,
+        'appointment_date' => $dateFormatted,
+        'type' => $validType,
         'priority' => 'Normal',
-        'clinical_reason' => $reason,
         'status' => 'Scheduled',
+        'reason' => $reason,
         'created_at' => now(),
         'updated_at' => now()
     ]);
@@ -2564,7 +2581,7 @@ Route::post('/v1/patient-portal/request-appointment', function (Request $request
         'action' => 'PATIENT_SELF_SERVICE_APPOINTMENT_REQUESTED',
         'entity_type' => 'Appointment',
         'entity_id' => $aptId,
-        'payload' => json_encode(['patient_id' => $patientId, 'doctor_id' => $doctorId, 'date' => $date]),
+        'payload' => json_encode(['patient_id' => $patientId, 'doctor_id' => $doctorId, 'date' => $dateFormatted, 'reason' => $reason]),
         'created_at' => now()
     ]);
 

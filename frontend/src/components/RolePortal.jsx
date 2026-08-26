@@ -1241,6 +1241,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
           ]
         });
         fetchPrescriptionsData();
+        fetchAppointmentsData();
       }
     } catch (err) {
       console.error(err);
@@ -2729,89 +2730,115 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-                    <th style={{ padding: '14px' }}>APPOINTMENT DATE & TIME</th>
-                    <th style={{ padding: '14px' }}>PATIENT (EHR)</th>
-                    <th style={{ padding: '14px' }}>ATTENDING CLINICIAN</th>
-                    <th style={{ padding: '14px' }}>CONSULTATION TYPE</th>
-                    <th style={{ padding: '14px' }}>PRIORITY</th>
-                    <th style={{ padding: '14px' }}>CLINICAL REASON</th>
-                    <th style={{ padding: '14px' }}>STATUS</th>
-                    <th style={{ padding: '14px' }}>ACTIONS</th>
+                    <th style={{ padding: '14px 16px', minWidth: '180px' }}>APPOINTMENT DATE & TIME</th>
+                    <th style={{ padding: '14px 16px', minWidth: '200px' }}>PATIENT (EHR)</th>
+                    <th style={{ padding: '14px 16px', minWidth: '220px' }}>ATTENDING CLINICIAN</th>
+                    <th style={{ padding: '14px 16px', minWidth: '150px' }}>CONSULTATION TYPE</th>
+                    <th style={{ padding: '14px 16px', minWidth: '110px' }}>PRIORITY</th>
+                    <th style={{ padding: '14px 16px', minWidth: '200px' }}>CLINICAL REASON</th>
+                    <th style={{ padding: '14px 16px', minWidth: '130px' }}>STATUS</th>
+                    <th style={{ padding: '14px 16px', minWidth: '240px' }}>ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredAppointments.map(a => (
-                    <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ fontWeight: '700', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <Clock size={14} />
-                          <span>{new Date(a.appointment_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Booking #{a.id}</div>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ fontWeight: '700' }}>{a.patient_name}</div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontFamily: 'monospace' }}>{a.patient_code} • {a.blood_group || 'O+'}</div>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ fontWeight: '700' }}>Dr. {a.doctor_name}</div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{a.specialization || 'General Care'} ({a.department_name || 'OPD'})</div>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
-                          {a.type}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <span style={{ 
-                          padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.78rem',
-                          background: a.priority === 'Emergency' || a.priority === 'High' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)',
-                          color: a.priority === 'Emergency' || a.priority === 'High' ? 'var(--danger)' : 'var(--success)'
-                        }}>
-                          {a.priority}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px', maxWidth: '220px' }}>
-                        <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={a.reason}>
-                          {a.reason || 'Routine consultation.'}
-                        </div>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <span className={`badge ${
-                          a.status === 'Completed' ? 'badge-success' : (a.status === 'In_Progress' || a.status === 'Scheduled' ? 'badge-primary' : 'badge-warning')
-                        }`} style={{ textTransform: 'capitalize' }}>
-                          {a.status ? a.status.replace('_', ' ') : 'Scheduled'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '14px' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                          <button 
-                            onClick={() => handleOpenRxForAppointment(a)}
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
-                            title="Issue Rx Prescription for this appointment"
-                          >
-                            <FileText size={13} />
-                            <span>Issue Rx</span>
-                          </button>
-                          <button 
-                            onClick={() => { setSelectedAppointment(a); setShowEditAppointmentModal(true); }}
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 8px', fontSize: '0.75rem' }}
-                          >
-                            <Edit size={13} />
-                          </button>
-                          <button 
-                            onClick={() => { setSelectedAppointment(a); setShowDeleteAppointmentModal(true); }}
-                            className="btn btn-secondary" 
-                            style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredAppointments.map(a => {
+                    const existingRx = prescriptionsList.find(rx => String(rx.appointment_id) === String(a.id));
+                    return (
+                      <tr key={a.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: '700', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <Clock size={14} />
+                            <span>{new Date(a.appointment_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                          </div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>Booking #{a.id}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: '700', color: 'var(--text-main)' }}>{a.patient_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--primary)', fontFamily: 'monospace', marginTop: '2px' }}>{a.patient_code} • {a.blood_group || 'O+'}</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: '700', color: 'var(--text-main)' }}>Dr. {a.doctor_name}</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>{a.specialization || 'General Care'} ({a.department_name || 'OPD'})</div>
+                        </td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <span style={{ background: 'rgba(99, 102, 241, 0.15)', color: 'var(--primary)', padding: '4px 8px', borderRadius: '6px', fontWeight: '700', fontSize: '0.78rem' }}>
+                            {a.type}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <span style={{ 
+                            padding: '4px 8px', borderRadius: '6px', fontWeight: '800', fontSize: '0.78rem',
+                            background: a.priority === 'Emergency' || a.priority === 'High' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                            color: a.priority === 'Emergency' || a.priority === 'High' ? 'var(--danger)' : 'var(--success)'
+                          }}>
+                            {a.priority}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', maxWidth: '220px' }}>
+                          <div style={{ fontSize: '0.82rem', color: 'var(--text-main)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }} title={a.reason}>
+                            {a.reason || 'Routine consultation.'}
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <span className={`badge ${
+                            a.status === 'Completed' ? 'badge-success' : (a.status === 'In_Progress' || a.status === 'Scheduled' ? 'badge-primary' : 'badge-warning')
+                          }`} style={{ textTransform: 'capitalize' }}>
+                            {a.status ? a.status.replace('_', ' ') : 'Scheduled'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                            {existingRx ? (
+                              <>
+                                <button 
+                                  onClick={() => { setSelectedPrescription(existingRx); setShowViewPrescriptionModal(true); }}
+                                  className="btn" 
+                                  style={{ padding: '6px 10px', fontSize: '0.74rem', background: 'rgba(16, 185, 129, 0.15)', color: 'var(--success)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '6px', fontWeight: '700', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                                  title="Rx already issued for this appointment. Click to view prescription slip."
+                                >
+                                  <CheckCircle2 size={13} />
+                                  <span>Rx Issued ({existingRx.prescription_code || `#${existingRx.id}`})</span>
+                                </button>
+                                <button 
+                                  onClick={() => handleOpenRxForAppointment(a)}
+                                  className="btn btn-secondary" 
+                                  style={{ padding: '6px 8px', fontSize: '0.74rem', color: 'var(--teal-accent)' }}
+                                  title="Issue an additional/new Rx prescription for this appointment"
+                                >
+                                  <Plus size={12} />
+                                  <span>New Rx</span>
+                                </button>
+                              </>
+                            ) : (
+                              <button 
+                                onClick={() => handleOpenRxForAppointment(a)}
+                                className="btn btn-secondary" 
+                                style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--teal-accent)' }}
+                                title="Issue Rx Prescription for this appointment"
+                              >
+                                <FileText size={13} />
+                                <span>Issue Rx</span>
+                              </button>
+                            )}
+                            <button 
+                              onClick={() => { setSelectedAppointment(a); setShowEditAppointmentModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem' }}
+                            >
+                              <Edit size={13} />
+                            </button>
+                            <button 
+                              onClick={() => { setSelectedAppointment(a); setShowDeleteAppointmentModal(true); }}
+                              className="btn btn-secondary" 
+                              style={{ padding: '6px 8px', fontSize: '0.75rem', color: 'var(--danger)' }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -5765,8 +5792,8 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
       {/* VIEW & PRINT PRESCRIPTION SLIP MODAL */}
       {showViewPrescriptionModal && selectedPrescription && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="glass-panel" style={{ width: '100%', maxWidth: '600px', padding: '32px', position: 'relative', background: '#fff', color: '#1e293b' }}>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <div className="glass-panel" style={{ width: '100%', maxWidth: '640px', maxHeight: '90vh', overflowY: 'auto', padding: '32px', position: 'relative', background: '#fff', color: '#1e293b', borderRadius: '16px' }}>
             <button onClick={() => setShowViewPrescriptionModal(false)} style={{ position: 'absolute', right: '20px', top: '20px', background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer' }}>
               <X size={20} />
             </button>

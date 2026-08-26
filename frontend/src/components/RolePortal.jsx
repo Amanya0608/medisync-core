@@ -2039,7 +2039,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
   const urgentTriageCount = triageLogsList.filter(t => t.suggested_triage_level === 'Urgent').length;
   const avgConfidenceScore = triageLogsList.length > 0
     ? (triageLogsList.reduce((acc, curr) => acc + (parseFloat(curr.ai_confidence_score) || 0), 0) / triageLogsList.length).toFixed(1)
-    : '94.5';
+    : '0.0';
 
   // Duty Status Counters
   const onDutyCount = staffList.filter(s => s.duty_status === 'on_duty').length;
@@ -2055,17 +2055,40 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
   const avgOverallRiskScore = aiRiskData.length > 0
     ? aiRiskData.reduce((acc, curr) => acc + (parseFloat(curr.expiry_risk_score) || 0), 0) / aiRiskData.length
-    : 38.6;
+    : 0;
 
-  const trendDataPoints = [
-    { day: 'Mon', x: 25, y: 110, val: 12 },
-    { day: 'Tue', x: 100, y: 65, val: 28 },
-    { day: 'Wed', x: 175, y: 85, val: 21 },
-    { day: 'Thu', x: 250, y: 40, val: 35 },
-    { day: 'Fri', x: 325, y: 55, val: 30 },
-    { day: 'Sat', x: 400, y: 30, val: 42 },
-    { day: 'Sun', x: 475, y: 60, val: 26 }
-  ];
+  // Real Dynamic 7-Day Consultation & Triage Activity Trend
+  const trendDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const dayCoords = [25, 100, 175, 250, 325, 400, 475];
+  const dayCounts = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+
+  (roleAppointmentsList || []).forEach(a => {
+    const dateVal = a.appointment_date || a.created_at;
+    if (dateVal) {
+      const d = new Date(dateVal);
+      if (!isNaN(d.getTime())) {
+        const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+        if (dayCounts[dayName] !== undefined) dayCounts[dayName]++;
+      }
+    }
+  });
+
+  (triageLogsList || []).forEach(t => {
+    if (t.created_at) {
+      const d = new Date(t.created_at);
+      if (!isNaN(d.getTime())) {
+        const dayName = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+        if (dayCounts[dayName] !== undefined) dayCounts[dayName]++;
+      }
+    }
+  });
+
+  const maxTrendVal = Math.max(...Object.values(dayCounts), 1);
+  const trendDataPoints = trendDays.map((day, idx) => {
+    const val = dayCounts[day];
+    const y = 110 - Math.round((val / maxTrendVal) * 75);
+    return { day, x: dayCoords[idx], y, val };
+  });
 
   // Department Counters
   const activeDepartmentsCount = departmentsList.filter(d => d.status === 'active').length;
@@ -3995,13 +4018,13 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
 
                     {/* Gradient Smooth Area Fill */}
                     <path
-                      d="M 25,110 Q 60,65 100,65 T 175,85 T 250,40 T 325,55 T 400,30 T 475,60 L 475,135 L 25,135 Z"
+                      d={`M ${trendDataPoints[0].x},${trendDataPoints[0].y} ` + trendDataPoints.slice(1).map(pt => `L ${pt.x},${pt.y}`).join(' ') + ` L ${trendDataPoints[6].x},135 L ${trendDataPoints[0].x},135 Z`}
                       fill="url(#triageTrendGradient)"
                     />
 
-                    {/* Smooth Curved Line */}
+                    {/* Dynamic Trend Line */}
                     <path
-                      d="M 25,110 Q 60,65 100,65 T 175,85 T 250,40 T 325,55 T 400,30 T 475,60"
+                      d={`M ${trendDataPoints[0].x},${trendDataPoints[0].y} ` + trendDataPoints.slice(1).map(pt => `L ${pt.x},${pt.y}`).join(' ')}
                       fill="none"
                       stroke="url(#triageLineGradient)"
                       strokeWidth="3.5"
@@ -4093,10 +4116,7 @@ export default function RolePortal({ user, onLogout, theme, setTheme }) {
                     <div key={d.id} style={{ background: 'rgba(0,0,0,0.15)', padding: '12px', borderRadius: '8px' }}>
                       <div style={{ fontWeight: '700', fontSize: '0.85rem', color: 'var(--primary)' }}>{d.name}</div>
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Code: {d.code} • Floor: {d.location_floor || 'G-01'}</div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', marginTop: '6px', fontWeight: '700' }}>
-                        <span>Capacity: 25 Beds</span>
-                        <span style={{ color: 'var(--success)' }}>Active</span>
-                      </div>
+
                     </div>
                   ))}
                 </div>
